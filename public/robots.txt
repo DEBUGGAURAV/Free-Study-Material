@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Allow: /branch/
+Allow: /note/
+Disallow: /api/admin/
+Disallow: /api/auth/
+Disallow: /api/chat/
+Disallow: /api/security/
+Disallow: /api/help/admin/
+Disallow: /api/notes/*/stream
+Sitemap: https://freestudymaterial.pages.dev/sitemap.xml

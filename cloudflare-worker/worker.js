@@ -196,7 +196,18 @@ export default {
     }
 
     // 2.5. 🤖 Zero-Server-CPU Academic AI Edge Proxy: /api/ai/ask
+    // 🛡️ STRICT LOGIN GATE: Require authenticated session (Authorization or Cookie) before burning AI keys
     if (url.pathname === '/api/ai/ask' && request.method === 'POST') {
+      const hasAuthCred = Boolean(request.headers.get('Authorization') || request.headers.get('Cookie'));
+      if (!hasAuthCred) {
+        const unauthHeaders = new Headers({ 'Content-Type': 'application/json' });
+        applyCors(unauthHeaders, request);
+        return new Response(JSON.stringify({
+          success: false,
+          authRequired: true,
+          message: 'Please sign in to use AI Study Assistant.',
+        }), { status: 401, headers: unauthHeaders });
+      }
       const groqKey = env.GROQ_API_KEY || '';
       const geminiKey = env.GEMINI_API_KEY || '';
 
@@ -325,7 +336,7 @@ export default {
         const noteId = url.pathname.match(/^\/api\/notes\/([^/]+)\//)?.[1];
         if (noteId && (request.method === 'GET' || request.method === 'HEAD')) {
           const accessUrl = new URL(`/api/notes/${encodeURIComponent(noteId)}/access`, originBase);
-          for (const name of ['ticket']) {
+          for (const name of ['ticket', 'download', 'attachment']) {
             const value = url.searchParams.get(name);
             if (value) accessUrl.searchParams.set(name, value);
           }
@@ -338,6 +349,26 @@ export default {
           const queryToken = url.searchParams.get('token');
           if (!accessHeaders.has('authorization') && queryToken) {
             accessHeaders.set('Authorization', `Bearer ${queryToken}`);
+          }
+
+          // 🛡️ STRICT LOGIN GATE: Block unauthenticated requests immediately at Edge (0 origin load!)
+          const hasAnyCredential = Boolean(
+            accessHeaders.has('authorization') ||
+            accessHeaders.has('cookie') ||
+            url.searchParams.get('ticket') ||
+            queryToken
+          );
+          if (!hasAnyCredential) {
+            const headers = new Headers({
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-store',
+            });
+            applyCors(headers, request);
+            return new Response(JSON.stringify({
+              success: false,
+              authRequired: true,
+              message: 'Restricted Access: Please sign in or register to read or download notes.',
+            }), { status: 401, headers });
           }
 
           try {
@@ -360,8 +391,9 @@ export default {
               });
             }
           } catch (_) {
-            // If origin /access check times out during Render spin-up, fail-open for non-download preview hits so Edge Cache still delivers in 1ms
-            if (url.searchParams.get('download') === '1' && !accessHeaders.has('authorization') && !accessHeaders.has('cookie')) {
+            // If origin /access check times out during Render spin-up:
+            // Only allow verified-credential preview hits (never unauthenticated guests, never downloads when lock status unknown)
+            if (url.searchParams.get('download') === '1' || !hasAnyCredential) {
               const headers = new Headers({
                 'Content-Type': 'application/json',
                 'Cache-Control': 'no-store',
@@ -369,9 +401,9 @@ export default {
               applyCors(headers, request);
               return new Response(JSON.stringify({
                 success: false,
-                message: 'Could not verify note visibility.',
+                message: 'Could not verify note access right now. Please retry in a moment.',
               }), {
-                status: 503,
+                status: hasAnyCredential ? 503 : 401,
                 headers,
               });
             }
@@ -712,6 +744,109 @@ export default {
           status: 500,
           headers: { 'Access-Control-Allow-Origin': '*' }
         });
+      }
+    }
+
+    // 4.5. ⚡ Zero-Load Edge Catalog Cache for Public Read-Only Endpoints (0 Render CPU & 0 DB Reads!)
+    // Strictly skips caching whenever Authorization or session/admin cookies are present so Admin hidden notes never leak!
+    const PUBLIC_CATALOG_PATHS = new Set([
+      '/api/notes',
+      '/api/notices',
+      '/api/notes/branches',
+      '/api/notes/subjects',
+      '/api/admin/tech-flags',
+    ]);
+    if (PUBLIC_CATALOG_PATHS.has(url.pathname)) {
+      const cache = caches.default;
+      const cleanCatalogUrl = new URL(url.origin + url.pathname + url.search);
+      cleanCatalogUrl.searchParams.delete('purge');
+      const catalogCacheKey = new Request(cleanCatalogUrl.toString(), { method: 'GET' });
+
+      if (request.method === 'PURGE' || url.searchParams.get('purge') === '1') {
+        const baseKey = new Request(url.origin + url.pathname, { method: 'GET' });
+        const [d1, d2] = await Promise.all([
+          cache.delete(catalogCacheKey),
+          cache.delete(baseKey),
+        ]);
+        const purgeHeaders = new Headers({ 'Content-Type': 'application/json' });
+        applyCors(purgeHeaders, request);
+        return new Response(JSON.stringify({ success: true, purged: Boolean(d1 || d2), path: url.pathname }), {
+          status: 200,
+          headers: purgeHeaders,
+        });
+      }
+
+      const cookieStr = request.headers.get('Cookie') || '';
+      const hasSessionAuth = Boolean(
+        request.headers.get('Authorization') ||
+        /(?:^|;\s*)(?:fsm_token|fsm_admin_token|admin_token|token|vault_token)=/.test(cookieStr)
+      );
+
+      if (request.method === 'GET' && !hasSessionAuth) {
+        const cachedCatalog = await cache.match(catalogCacheKey);
+        if (cachedCatalog) {
+          const clientEtag = request.headers.get('If-None-Match');
+          const cachedEtag = cachedCatalog.headers.get('ETag');
+          if (clientEtag && cachedEtag && clientEtag === cachedEtag) {
+            const notModHeaders = new Headers({
+              'ETag': cachedEtag,
+              'Cache-Control': cachedCatalog.headers.get('Cache-Control') || 'public, max-age=60, s-maxage=600',
+              'X-Edge-Catalog-Cache': 'HIT-304',
+              'X-Edge-Location': edgeColo,
+            });
+            applyCors(notModHeaders, request);
+            return new Response(null, { status: 304, headers: notModHeaders });
+          }
+          const hitHeaders = new Headers(cachedCatalog.headers);
+          hitHeaders.set('X-Edge-Catalog-Cache', 'HIT');
+          hitHeaders.set('CF-Cache-Status', 'HIT');
+          hitHeaders.set('X-Edge-Location', edgeColo);
+          applyCors(hitHeaders, request);
+          return new Response(cachedCatalog.body, { status: 200, headers: hitHeaders });
+        }
+
+        // Edge Cache Miss: Fetch from healthy origin and store clean public response in Cloudflare Edge
+        for (let i = 0; i < streamOrigins.length; i++) {
+          const origin = streamOrigins[i];
+          try {
+            const originReqUrl = new URL(url.pathname + url.search, origin);
+            const originRes = await fetch(originReqUrl.toString(), {
+              method: 'GET',
+              headers: {
+                'Accept': 'application/json',
+                'X-Via-Worker': 'true',
+                'CF-Worker': 'true',
+              },
+              signal: AbortSignal.timeout(8000),
+            });
+            if (originRes.status === 200) {
+              markOriginUp(origin);
+              const cc = (originRes.headers.get('Cache-Control') || '').toLowerCase();
+              const isPublicCacheable = !cc.includes('private') && !cc.includes('no-store');
+              const bodyText = await originRes.text();
+              const respHeaders = new Headers(originRes.headers);
+              respHeaders.delete('Set-Cookie');
+              respHeaders.delete('set-cookie');
+              respHeaders.delete('Vary');
+              respHeaders.delete('vary');
+              if (isPublicCacheable) {
+                const ttl = url.pathname === '/api/admin/tech-flags' ? 15 : 600;
+                respHeaders.set('Cache-Control', `public, max-age=${ttl}, s-maxage=${ttl}, stale-while-revalidate=86400`);
+                const edgeStoreResp = new Response(bodyText, { status: 200, headers: new Headers(respHeaders) });
+                ctx.waitUntil(cache.put(catalogCacheKey, edgeStoreResp).catch(() => {}));
+                respHeaders.set('X-Edge-Catalog-Cache', 'MISS-SAVED');
+              } else {
+                respHeaders.set('X-Edge-Catalog-Cache', 'BYPASS');
+              }
+              respHeaders.set('X-Edge-Location', edgeColo);
+              respHeaders.set('X-Upstream-Origin', origin);
+              applyCors(respHeaders, request);
+              return new Response(bodyText, { status: 200, headers: respHeaders });
+            }
+          } catch (_) {
+            markOriginDown(origin);
+          }
+        }
       }
     }
 

@@ -35,6 +35,29 @@ function isAdminUser(user) {
 const noteBufferCache = new Map();
 let dbWritesPreventedCount = 0;
 
+// ⚡ Batched Download Counter Buffer (Flushes accumulated note download increments to Firestore every 3 minutes — saves 90%+ Firestore writes!)
+const pendingNoteDownloadCounts = new Map(); // noteId -> latestCount
+function queueBatchedNoteDownloadIncrement(noteId, latestCount) {
+  if (!noteId) return;
+  if (pendingNoteDownloadCounts.has(noteId)) {
+    dbWritesPreventedCount++;
+  }
+  pendingNoteDownloadCounts.set(noteId, Math.max(Number(pendingNoteDownloadCounts.get(noteId) || 0), Number(latestCount || 1)));
+}
+async function flushBatchedNoteDownloads() {
+  if (!db || pendingNoteDownloadCounts.size === 0) return;
+  const entries = Array.from(pendingNoteDownloadCounts.entries());
+  pendingNoteDownloadCounts.clear();
+  for (const [noteId, count] of entries) {
+    try {
+      await db.collection("notes").doc(noteId).update({ downloadsCount: count });
+    } catch (_) {}
+  }
+}
+setInterval(() => {
+  flushBatchedNoteDownloads().catch(() => {});
+}, 3 * 60 * 1000).unref();
+
 // Anti-Spam / Cooldown Cache for Telegram Activity Alerts (Prevents repeat notices for 15 minutes)
 const streamNoticeCooldown = new Map();
 const STREAM_NOTICE_COOLDOWN_MS = 15 * 60 * 1000; // 15 minutes
@@ -916,7 +939,13 @@ router.get("/", authenticateToken, async (req, res) => {
     if (cachedData) {
       const etag = cachedData.etag || `W/"${cachedData.notes.length}-${cachedData.totalCount}"`;
       res.setHeader("ETag", etag);
-      res.setHeader("Cache-Control", "public, max-age=30, s-maxage=60, stale-while-revalidate=120");
+      if (isAdmin) {
+        // 🛡️ Never cache admin responses (which include hidden notes) in shared CDN proxies
+        res.setHeader("Cache-Control", "private, no-store");
+      } else {
+        res.setHeader("Vary", "Authorization, Cookie");
+        res.setHeader("Cache-Control", "public, max-age=60, s-maxage=600, stale-while-revalidate=86400");
+      }
 
       if (req.headers["if-none-match"] === etag) {
         res.setHeader("X-Cache", "HIT-304");
@@ -1027,7 +1056,12 @@ router.get("/", authenticateToken, async (req, res) => {
     ramCache.set(cacheKey, { notes, totalCount, etag, rawJson }, 1800);
 
     res.setHeader("ETag", etag);
-    res.setHeader("Cache-Control", "public, max-age=30, s-maxage=60, stale-while-revalidate=120");
+    if (isAdmin) {
+      res.setHeader("Cache-Control", "private, no-store");
+    } else {
+      res.setHeader("Vary", "Authorization, Cookie");
+      res.setHeader("Cache-Control", "public, max-age=60, s-maxage=600, stale-while-revalidate=86400");
+    }
 
     if (req.headers["if-none-match"] === etag) {
       res.setHeader("X-Cache", "MISS-304");
@@ -1289,6 +1323,32 @@ router.get("/:id/access", downloadLimiter, authenticateToken, async (req, res) =
       }
     }
 
+    // 🛡️ STRICT LOGIN GATE ("notes sabhi ko dikhein, use wahi kar paaye jo login ho"):
+    // Require authenticated user or valid ephemeral stream ticket for BOTH reading & downloading
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        authRequired: true,
+        message: "Restricted Access: Please sign in or register to read or download notes.",
+      });
+    }
+
+    const callerIsAdmin = isAdminUser(user);
+
+    // 🔒 Enforce Maintenance Mode even on Cloudflare Edge Cache HITs
+    if (!callerIsAdmin) {
+      try {
+        const { isMaintenanceActive } = require("../middleware/maintenance");
+        if (typeof isMaintenanceActive === "function" && isMaintenanceActive()) {
+          return res.status(503).json({
+            success: false,
+            maintenance: true,
+            message: "Platform is currently in scheduled maintenance mode.",
+          });
+        }
+      } catch (_) {}
+    }
+
     const { id } = req.params;
     let noteData = ramCache.get(`note_${id}`);
     if (!noteData) {
@@ -1302,8 +1362,40 @@ router.get("/:id/access", downloadLimiter, authenticateToken, async (req, res) =
       if (doc.exists) noteData = { id: doc.id, ...doc.data() };
     }
 
-    if (!noteData || (noteData.isVisible === false && !isAdminUser(user))) {
+    if (!noteData || (noteData.isVisible === false && !callerIsAdmin)) {
       return res.status(404).json({ success: false, message: "Note not found in cloud vault." });
+    }
+
+    // 🔒 Enforce Single-Note & Global Download Lock / Curfew / Exam Guard on Edge Cache HITs too!
+    const isDownloadReq = req.query.download === "1" || req.query.attachment === "1";
+    if (isDownloadReq) {
+      const isSingleDisabled =
+        noteData.allowDownload === false ||
+        noteData.allowDownload === "false" ||
+        noteData.allowDownload === 0 ||
+        noteData.allowDownload === "0";
+
+      let globalDownloadAllowed = true;
+      let globalReason = "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.";
+      try {
+        const adminRoutes = require("./admin");
+        if (typeof adminRoutes.isDownloadAllowed === "function") {
+          globalDownloadAllowed = adminRoutes.isDownloadAllowed();
+        }
+        if (typeof adminRoutes.getTechSettings === "function") {
+          const tSet = adminRoutes.getTechSettings();
+          if (tSet?.downloadDisabledReason) globalReason = tSet.downloadDisabledReason;
+        }
+      } catch (_) {}
+
+      const blockedForCaller = callerIsAdmin ? isSingleDisabled : Boolean(isSingleDisabled || !globalDownloadAllowed);
+      if (blockedForCaller) {
+        return res.status(403).json({
+          success: false,
+          downloadDisabled: true,
+          message: noteData.downloadDisabledReason || globalReason,
+        });
+      }
     }
 
     return res.json({ success: true, allowed: true });
@@ -1353,6 +1445,16 @@ router.put("/:id", authenticateToken, requireAdmin, async (req, res) => {
     } catch (_) {}
     ramCache.delete(`note_${id}`);
     invalidateAllCache({ keepNotesRam: true });
+    try {
+      const { broadcastCatalogEvent } = require("../services/realtimeEventService");
+      broadcastCatalogEvent({ event: "note_updated", noteId: id, updateData });
+    } catch (_) {}
+    try {
+      const adminRoutes = require("./admin");
+      if (typeof adminRoutes.purgeEdgeCatalogCache === "function") {
+        adminRoutes.purgeEdgeCatalogCache(["/api/notes", "/api/notes/branches", "/api/notes/subjects"]);
+      }
+    } catch (_) {}
 
     return res.json({ success: true, message: "Note updated successfully in vault!" });
   } catch (err) {
@@ -1962,11 +2064,6 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
         (req.headers["cf-ray"] && isOriginWorkerDev)
       );
 
-      // Cloudflare Edge Worker caching is recognized as trusted CDN infrastructure for reading streams (never for bypassing student download gating)
-      if (isWorkerProxy && !requestingUser && !isDownload) {
-        requestingUser = { id: "cf_worker_edge", role: "worker", isEdgeCDN: true };
-      }
-
       // Only block if an untrusted third-party site is explicitly attempting cross-site hotlinking
       if (secFetchSite === "cross-site" && !isTrustedOrigin && !isWorkerProxy) {
         console.warn(`[SECURITY] Blocked third-party cross-site hotlinking from: ${originHeader || "unknown"}`);
@@ -1977,8 +2074,9 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       }
     }
 
-    // Gated Student Access: Only gate direct file downloads for unauthenticated users; allow reading / viewer streaming for all students
-    if (!requestingUser && isDownload) {
+    // 🛡️ STRICT LOGIN GATE ("notes sabhi ko dikhein, use wahi kar paaye jo login ho"):
+    // Enforce authentication on BOTH online PDF preview streaming AND file downloads
+    if (!requestingUser) {
       const isHtmlRequest =
         req.headers["sec-fetch-dest"] === "document" ||
         req.headers["sec-fetch-mode"] === "navigate" ||
@@ -1990,7 +2088,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       }
       return res.status(401).json({
         success: false,
-        message: "Restricted Access: Free Study Material is exclusively for registered students. Please sign in or register to download notes.",
+        message: "Restricted Access: Free Study Material is exclusively for registered students. Please sign in or register to read or download notes.",
         authRequired: true,
         signInUrl: "/?auth=signin",
         signUpUrl: "/?auth=signup",
@@ -2225,11 +2323,10 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     res.setHeader("Cloudflare-CDN-Cache-Control", `max-age=${retentionSeconds}`);
     res.setHeader("ETag", `W/"${note.fileHash || note.id}"`);
 
-    // Asynchronously increment download count ONLY on actual downloads (Saves 95% Firestore DB writes!)
+    // ⚡ Batched Download Counter: Accumulate in RAM & flush to Firestore every 3 minutes (Saves 90%+ Firestore note writes!)
     if (isDownload) {
-      db.collection("notes").doc(id).update({
-        downloadsCount: (note.downloadsCount || 0) + 1,
-      }).catch(() => {});
+      note.downloadsCount = (note.downloadsCount || 0) + 1;
+      queueBatchedNoteDownloadIncrement(id, note.downloadsCount);
 
       if (requestingUser && requestingUser.id && requestingUser.id !== "admin-root" && requestingUser.role !== "admin") {
         try {

@@ -349,15 +349,85 @@ app.use(
   })
 );
 
-// 🔗 Smart WhatsApp / Telegram Dynamic OG Preview Injector for Note Share Links (/?note=ID or /note/ID)
+// 🤖 Google SEO: Dynamic robots.txt (allows public catalog, branch & note pages; blocks private APIs & raw streams)
+app.get("/robots.txt", (req, res) => {
+  const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
+  const host = req.headers["x-forwarded-host"] || req.get("host") || "freestudymaterial.pages.dev";
+  const originUrl = `${proto}://${host}`;
+  const robotsTxt = [
+    "User-agent: *",
+    "Allow: /",
+    "Allow: /branch/",
+    "Allow: /note/",
+    "Disallow: /api/admin/",
+    "Disallow: /api/auth/",
+    "Disallow: /api/chat/",
+    "Disallow: /api/security/",
+    "Disallow: /api/help/admin/",
+    "Disallow: /api/notes/*/stream",
+    `Sitemap: ${originUrl}/sitemap.xml`,
+    "",
+  ].join("\n");
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=86400");
+  return res.status(200).send(robotsTxt);
+});
+
+// 🗺️ Google SEO: Dynamic 0-Firestore-Read XML Sitemap (served directly from RAM/Turso cache + 1h Edge Cache)
+app.get("/sitemap.xml", async (req, res) => {
+  try {
+    const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
+    const host = req.headers["x-forwarded-host"] || req.get("host") || "freestudymaterial.pages.dev";
+    const originUrl = `${proto}://${host}`;
+    let cachedNotes = [];
+    try {
+      const { getAllCachedNotes } = require("./services/tursoNotesCacheService");
+      cachedNotes = (await getAllCachedNotes()) || [];
+    } catch (_) {}
+
+    const visibleNotes = cachedNotes.filter((n) => n && n.id && n.isVisible !== false);
+    const branches = Array.from(
+      new Set(visibleNotes.map((n) => String(n.branch || "").trim().toUpperCase()).filter(Boolean))
+    );
+    const nowIso = new Date().toISOString().split("T")[0];
+
+    const urlEntries = [
+      `  <url><loc>${escapeXmlAndHtml(originUrl)}/</loc><lastmod>${nowIso}</lastmod><changefreq>daily</changefreq><priority>1.0</priority></url>`,
+    ];
+
+    for (const br of branches) {
+      urlEntries.push(
+        `  <url><loc>${escapeXmlAndHtml(originUrl)}/branch/${encodeURIComponent(br)}</loc><lastmod>${nowIso}</lastmod><changefreq>daily</changefreq><priority>0.85</priority></url>`
+      );
+    }
+
+    for (const n of visibleNotes.slice(0, 1000)) {
+      const modDate = (n.updatedAt || n.createdAt || nowIso).toString().slice(0, 10);
+      urlEntries.push(
+        `  <url><loc>${escapeXmlAndHtml(originUrl)}/note/${encodeURIComponent(n.id)}</loc><lastmod>${escapeXmlAndHtml(modDate)}</lastmod><changefreq>weekly</changefreq><priority>0.75</priority></url>`
+      );
+    }
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urlEntries.join("\n")}\n</urlset>`;
+    res.setHeader("Content-Type", "application/xml; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400");
+    return res.status(200).send(xml);
+  } catch (err) {
+    return res.status(500).send("Sitemap temporarily unavailable");
+  }
+});
+
+// 🔗 Smart Google SEO + WhatsApp / Telegram Dynamic OG & JSON-LD Injector for Note (/note/ID, /?note=ID) & Branch (/branch/CSE) pages
 app.get("*", async (req, res, next) => {
   const pathMatch = req.path.match(/^\/note\/([^/]+)\/?$/i);
+  const branchMatch = req.path.match(/^\/branch\/([^/]+)\/?$/i);
   const sharedNoteId = (req.query?.note || req.query?.noteId || (pathMatch && pathMatch[1]) || "").trim();
+  const branchSlug = branchMatch ? decodeURIComponent(branchMatch[1]).trim() : "";
   if (
-    !sharedNoteId ||
+    (!sharedNoteId && !branchSlug) ||
     req.path.startsWith("/api/") ||
     req.path.startsWith("/assets/") ||
-    /\.(js|css|mjs|map|png|jpg|jpeg|svg|ico|woff2?|json)$/i.test(req.path)
+    /\.(js|css|mjs|map|png|jpg|jpeg|svg|ico|woff2?|json|xml|txt)$/i.test(req.path)
   ) {
     return next();
   }
@@ -365,26 +435,59 @@ app.get("*", async (req, res, next) => {
   try {
     const fs = require("fs");
     const indexPath = path.join(distPath, "index.html");
-    const noteMeta = await getPublicNoteMeta(sharedNoteId);
     const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
     const host = req.headers["x-forwarded-host"] || req.get("host");
     const originUrl = `${proto}://${host}`;
     const pageUrl = `${originUrl}${req.originalUrl}`;
-    const ogTags = buildOgMetaTagsHtml(noteMeta, pageUrl, originUrl);
-    const pageTitle = noteMeta
-      ? `${escapeXmlAndHtml(noteMeta.title)} — ${escapeXmlAndHtml(noteMeta.subject)} | Free Study Material`
-      : "Free Study Material — Academic Cloud & Notes Vault";
+
+    let pageTitle = "Free Study Material — Academic Cloud & Notes Vault";
+    let extraMetaHtml = "";
+
+    if (sharedNoteId) {
+      const noteMeta = await getPublicNoteMeta(sharedNoteId);
+      const ogTags = buildOgMetaTagsHtml(noteMeta, pageUrl, originUrl);
+      pageTitle = noteMeta
+        ? `${escapeXmlAndHtml(noteMeta.title)} — ${escapeXmlAndHtml(noteMeta.subject)} | Free Study Material`
+        : pageTitle;
+      const canonicalUrl = `${originUrl}/note/${encodeURIComponent(sharedNoteId)}`;
+      const ldJson = noteMeta
+        ? `<script type="application/ld+json">${JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "LearningResource",
+            name: noteMeta.title,
+            educationalLevel: noteMeta.course || "University",
+            about: noteMeta.subject || noteMeta.branch || "Engineering",
+            inLanguage: "en",
+            isAccessibleForFree: true,
+            url: canonicalUrl,
+            provider: { "@type": "EducationalOrganization", name: "Free Study Material", url: originUrl },
+          }).replace(/</g, "\\u003c")}</script>`
+        : "";
+      extraMetaHtml = `<link rel="canonical" href="${escapeXmlAndHtml(canonicalUrl)}" />${ogTags}${ldJson}`;
+    } else if (branchSlug) {
+      const cleanBranch = escapeXmlAndHtml(branchSlug.toUpperCase());
+      pageTitle = `${cleanBranch} Study Notes & PYQs — Free Study Material`;
+      const desc = `Download & read free ${cleanBranch} engineering study notes, handwritten lectures, and previous year question papers on Free Study Material.`;
+      const canonicalUrl = `${originUrl}/branch/${encodeURIComponent(branchSlug.toUpperCase())}`;
+      extraMetaHtml =
+        `<link rel="canonical" href="${escapeXmlAndHtml(canonicalUrl)}" />` +
+        `<meta name="description" content="${escapeXmlAndHtml(desc)}" />` +
+        `<meta property="og:title" content="${pageTitle}" />` +
+        `<meta property="og:description" content="${escapeXmlAndHtml(desc)}" />` +
+        `<meta property="og:url" content="${escapeXmlAndHtml(canonicalUrl)}" />`;
+    }
 
     if (fs.existsSync(indexPath)) {
       let html = fs.readFileSync(indexPath, "utf8");
-      html = html.replace(/<title>[\s\S]*?<\/title>/i, `<title>${pageTitle}</title>${ogTags}`);
+      html = html.replace(/<link\s+rel="canonical"[^>]*>/i, "");
+      html = html.replace(/<title>[\s\S]*?<\/title>/i, `<title>${pageTitle}</title>${extraMetaHtml}`);
       res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.setHeader("Cache-Control", "public, max-age=120, s-maxage=600");
+      res.setHeader("Cache-Control", "public, max-age=120, s-maxage=600, stale-while-revalidate=3600");
       return res.status(200).send(html);
     }
 
     // Minimal crawler-friendly fallback if dist isn't built yet
-    return res.status(200).send(`<!doctype html><html><head><meta charset="utf-8"><title>${pageTitle}</title>${ogTags}</head><body><h1>${pageTitle}</h1></body></html>`);
+    return res.status(200).send(`<!doctype html><html><head><meta charset="utf-8"><title>${pageTitle}</title>${extraMetaHtml}</head><body><h1>${pageTitle}</h1></body></html>`);
   } catch (_) {
     return next();
   }

@@ -1092,6 +1092,14 @@ router.patch("/notes/:id/visibility", authenticateToken, checkAdminOrPermission(
     } catch (_) {}
     ramCache.delete(`note_${id}`);
     invalidateAllCache({ keepNotesRam: true });
+    purgeEdgeCatalogCache(["/api/notes", "/api/notes/branches", "/api/notes/subjects"]);
+    try {
+      const { broadcastCatalogEvent } = require("../services/realtimeEventService");
+      broadcastCatalogEvent({
+        event: visUpdate.isVisible ? "catalog_synced" : "note_deleted",
+        noteId: id,
+      });
+    } catch (_) {}
     return res.json({ success: true, message: "Note visibility updated." });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -4608,11 +4616,24 @@ router.post("/cdn/prewarm-popular", authenticateToken, checkAdminOrPermission("a
 });
 
 /**
+ * Helper: Purge Cloudflare Edge Catalog Cache instantly when Admin updates notes, notices, or controls
+ */
+function purgeEdgeCatalogCache(paths = ["/api/notes", "/api/notices", "/api/admin/tech-flags"]) {
+  const cfWorker = (process.env.CF_WORKER_URL || process.env.VITE_CF_WORKER_URL || "").trim().replace(/\/+$/, "");
+  if (!cfWorker) return;
+  const workerSecret = (process.env.CF_WORKER_SECRET || process.env.ADMIN_BYPASS_KEY || "").trim();
+  const headers = workerSecret ? { "X-Worker-Secret": workerSecret } : {};
+  for (const p of paths) {
+    fetch(`${cfWorker}${p}?purge=1`, { method: "PURGE", headers }).catch(() => {});
+  }
+}
+
+/**
  * GET /api/admin/tech-flags
  * Public lightweight endpoint for frontend components to read active tech toggles & maintenance status
+ * Supports ETag/304 for 0-byte polling & 0 DB reads
  */
 router.get("/tech-flags", (req, res) => {
-  res.setHeader("Cache-Control", "public, max-age=20, s-maxage=30, stale-while-revalidate=60");
   let isMaint = false;
   try {
     const { isMaintenanceActive } = require("../middleware/maintenance");
@@ -4621,46 +4642,55 @@ router.get("/tech-flags", (req, res) => {
     isMaint = Boolean(techSettings.maintenanceMode);
   }
   const downloadAllowed = isDownloadAllowed();
+  const flags = {
+    enableCdnAutoPrewarm: techSettings.enableCdnAutoPrewarm,
+    cdnMaxRamItems: techSettings.cdnMaxRamItems || "auto",
+    enableP2pAirDrop: techSettings.enableP2pAirDrop !== false,
+    enableQrMeshConnect: techSettings.enableQrMeshConnect !== false,
+    p2pMaxPeers: techSettings.p2pMaxPeers || "auto",
+    autoP2pHardwareGuard: techSettings.autoP2pHardwareGuard !== false,
+    enableClientAi: techSettings.enableClientAi,
+    aiQuantization: techSettings.aiQuantization || "auto",
+    aiMaxContextChunks: techSettings.aiMaxContextChunks || "auto",
+    enableClientOcr: techSettings.enableClientOcr,
+    ocrMaxPages: techSettings.ocrMaxPages || "auto",
+    ocrBinarization: techSettings.ocrBinarization !== false,
+    enableClientCompression: techSettings.enableClientCompression,
+    compressionQuality: techSettings.compressionQuality || "auto",
+    autoNetworkAdaptive: techSettings.autoNetworkAdaptive !== false,
+    removeUnusedXrefs: techSettings.removeUnusedXrefs !== false,
+    enableOfflineQueue: techSettings.enableOfflineQueue,
+    inactivityTimeoutMinutes: techSettings.inactivityTimeoutMinutes,
+    enableInactivityWarning: techSettings.enableInactivityWarning,
+    enableFormulaClipper: techSettings.enableFormulaClipper,
+    enablePageDiscussionBridge: techSettings.enablePageDiscussionBridge !== false,
+    enableStudyRoom: techSettings.enableStudyRoom,
+    studyRoomMaxUsers: techSettings.studyRoomMaxUsers || "auto",
+    autoUiCollaboration: techSettings.autoUiCollaboration !== false,
+    dbWriteShieldMode: techSettings.dbWriteShieldMode || "auto",
+    maintenanceMode: isMaint,
+    maintenanceTitle: techSettings.maintenanceTitle,
+    maintenanceMessage: techSettings.maintenanceMessage,
+    maintenanceEstimatedEnd: techSettings.maintenanceEstimatedEnd,
+    allowNotesDownload: downloadAllowed,
+    downloadSchedule: techSettings.downloadSchedule || "manual",
+    downloadDisabledReason: techSettings.downloadDisabledReason || "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.",
+    enableAiMermaid: techSettings.enableAiMermaid !== false,
+    enableWebPush: techSettings.enableWebPush !== false,
+    enableShareRevisionCard: techSettings.enableShareRevisionCard !== false,
+  };
+
+  const etagSeed = `${techSettings.updatedAt || "init"}-${isMaint}-${downloadAllowed}`;
+  const etag = `W/"flags-${crypto.createHash("sha1").update(etagSeed).digest("hex").slice(0, 12)}"`;
+  res.setHeader("ETag", etag);
+  res.setHeader("Cache-Control", "public, max-age=10, s-maxage=15, stale-while-revalidate=60");
+  if (req.headers["if-none-match"] === etag) {
+    return res.status(304).end();
+  }
 
   return res.json({
     success: true,
-    flags: {
-      enableCdnAutoPrewarm: techSettings.enableCdnAutoPrewarm,
-      cdnMaxRamItems: techSettings.cdnMaxRamItems || "auto",
-      enableP2pAirDrop: techSettings.enableP2pAirDrop !== false,
-      enableQrMeshConnect: techSettings.enableQrMeshConnect !== false,
-      p2pMaxPeers: techSettings.p2pMaxPeers || "auto",
-      autoP2pHardwareGuard: techSettings.autoP2pHardwareGuard !== false,
-      enableClientAi: techSettings.enableClientAi,
-      aiQuantization: techSettings.aiQuantization || "auto",
-      aiMaxContextChunks: techSettings.aiMaxContextChunks || "auto",
-      enableClientOcr: techSettings.enableClientOcr,
-      ocrMaxPages: techSettings.ocrMaxPages || "auto",
-      ocrBinarization: techSettings.ocrBinarization !== false,
-      enableClientCompression: techSettings.enableClientCompression,
-      compressionQuality: techSettings.compressionQuality || "auto",
-      autoNetworkAdaptive: techSettings.autoNetworkAdaptive !== false,
-      removeUnusedXrefs: techSettings.removeUnusedXrefs !== false,
-      enableOfflineQueue: techSettings.enableOfflineQueue,
-      inactivityTimeoutMinutes: techSettings.inactivityTimeoutMinutes,
-      enableInactivityWarning: techSettings.enableInactivityWarning,
-      enableFormulaClipper: techSettings.enableFormulaClipper,
-      enablePageDiscussionBridge: techSettings.enablePageDiscussionBridge !== false,
-      enableStudyRoom: techSettings.enableStudyRoom,
-      studyRoomMaxUsers: techSettings.studyRoomMaxUsers || "auto",
-      autoUiCollaboration: techSettings.autoUiCollaboration !== false,
-      dbWriteShieldMode: techSettings.dbWriteShieldMode || "auto",
-      maintenanceMode: isMaint,
-      maintenanceTitle: techSettings.maintenanceTitle,
-      maintenanceMessage: techSettings.maintenanceMessage,
-      maintenanceEstimatedEnd: techSettings.maintenanceEstimatedEnd,
-      allowNotesDownload: downloadAllowed,
-      downloadSchedule: techSettings.downloadSchedule || "manual",
-      downloadDisabledReason: techSettings.downloadDisabledReason || "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.",
-      enableAiMermaid: techSettings.enableAiMermaid !== false,
-      enableWebPush: techSettings.enableWebPush !== false,
-      enableShareRevisionCard: techSettings.enableShareRevisionCard !== false,
-    },
+    flags,
   });
 });
 
@@ -4690,6 +4720,17 @@ router.post("/download/toggle", authenticateToken, checkAdminOrPermission("manag
     if (db) {
       await db.collection("settings").doc("tech_controls").set(techSettings, { merge: true }).catch(() => {});
     }
+
+    // 3. Instant Edge Cache Purge + Live SSE Broadcast so all open students reflect new download rule in <1s
+    purgeEdgeCatalogCache(["/api/admin/tech-flags"]);
+    try {
+      const { broadcastCatalogEvent } = require("../services/realtimeEventService");
+      broadcastCatalogEvent({
+        event: "control_updated",
+        allowNotesDownload: isDownloadAllowed(),
+        downloadDisabledReason: techSettings.downloadDisabledReason,
+      });
+    } catch (_) {}
 
     return res.json({
       success: true,
@@ -4734,6 +4775,18 @@ router.post("/maintenance/toggle", authenticateToken, checkAdminOrPermission("al
     // Broadcast maintenance state to all cluster servers
     try {
       broadcastMaintenanceToCluster(techSettings, req);
+    } catch (_) {}
+
+    // Instant Edge Cache Purge + Live SSE Broadcast so all students get maintenance update in <1s
+    purgeEdgeCatalogCache(["/api/admin/tech-flags"]);
+    try {
+      const { broadcastCatalogEvent } = require("../services/realtimeEventService");
+      broadcastCatalogEvent({
+        event: "control_updated",
+        maintenanceMode: Boolean(techSettings.maintenanceMode),
+        maintenanceTitle: techSettings.maintenanceTitle,
+        maintenanceMessage: techSettings.maintenanceMessage,
+      });
     } catch (_) {}
 
     return res.json({
@@ -6124,5 +6177,6 @@ router.getCdnRetentionSeconds = getCdnRetentionSeconds;
 router.getCdnRetentionDays = getCdnRetentionDays;
 router.getTechSettings = getTechSettings;
 router.isDownloadAllowed = isDownloadAllowed;
+router.purgeEdgeCatalogCache = purgeEdgeCatalogCache;
 
 module.exports = router;

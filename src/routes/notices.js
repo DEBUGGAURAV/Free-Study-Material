@@ -40,13 +40,25 @@ function calculateExpiresAt(retentionDays, baseDate = Date.now()) {
  */
 router.get("/", async (req, res) => {
   try {
-    const notices = await getAllCachedNotices();
+    const notices = (await getAllCachedNotices()) || [];
+    const latestTs = notices.reduce((acc, n) => {
+      const t = new Date(n?.updatedAt || n?.createdAt || 0).getTime() || 0;
+      return t > acc ? t : acc;
+    }, 0);
+    const etag = `W/"notices-${notices.length}-${latestTs}"`;
+
+    res.setHeader("ETag", etag);
+    res.setHeader("Cache-Control", "public, max-age=60, s-maxage=600, stale-while-revalidate=86400");
+
+    if (req.headers["if-none-match"] === etag) {
+      res.setHeader("X-Cache", "TURSO-EDGE-304");
+      return res.status(304).end();
+    }
 
     res.setHeader("X-Cache", "TURSO-EDGE-ACTIVE");
-    res.setHeader("Cache-Control", "public, max-age=30, s-maxage=60, stale-while-revalidate=120");
     return res.json({
       success: true,
-      notices: notices || [],
+      notices,
       defaultRetentionDays: NOTICE_RETENTION_DAYS,
     });
   } catch (err) {

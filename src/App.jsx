@@ -215,10 +215,34 @@ export default function App() {
   // 🛡️ Zero-Trust Security Quarantine Shield State (Strict Full-Page Lockdown Mode)
   const [securityDetention, setSecurityDetention] = useState(null);
 
+  const pendingNoteActionRef = useRef(null);
+
   const openAuth = useCallback((tab = "signin") => {
     setAuthInitialTab(tab);
     setIsAuthOpen(true);
   }, []);
+
+  // 🛡️ STRICT LOGIN GATE ("notes sabhi ko dikhein, use wahi kar paaye jo login ho") + Auto-Open After Login
+  const handleGuardedPreviewNote = useCallback(
+    (targetNote, initialPage = 1) => {
+      if (!targetNote) return;
+      const isAuthed = Boolean(
+        currentUserRef.current ||
+        (typeof window !== "undefined" && (window.__FSM_AUTH_TOKEN__ || window.__FSM_CURRENT_USER__)) ||
+        getAuthToken()
+      );
+      if (!isAuthed) {
+        pendingNoteActionRef.current = { type: "preview", note: targetNote, initialPage };
+        openAuth("signin");
+        return;
+      }
+      if (initialPage && initialPage > 1) {
+        setPreviewInitialPage(initialPage);
+      }
+      setPreviewNote(initialPage && initialPage > 1 ? { ...targetNote, _initialPage: initialPage } : targetNote);
+    },
+    [openAuth]
+  );
 
   // 🛡️ Strict Login-Gating Guard for AI Study & Circle to Search
   useEffect(() => {
@@ -335,7 +359,17 @@ export default function App() {
       setIsStudyPodOpen(true);
     }
 
-    // Smart Page QR Code / Direct Note Link Handler (Opens note directly on specified page + joins Page Study Pod if QR scanned)
+    // 🔗 Clean SEO Branch Route (/branch/CSE) & Search Query (?q=...) Support
+    const branchPathMatch = window.location.pathname.match(/^\/branch\/([^/]+)\/?$/i);
+    if (branchPathMatch && branchPathMatch[1]) {
+      setSelectedBranch(decodeURIComponent(branchPathMatch[1]).trim().toUpperCase());
+    }
+    const urlSearchQuery = params.get("q");
+    if (urlSearchQuery && urlSearchQuery.trim()) {
+      setSearchTerm(urlSearchQuery.trim());
+    }
+
+    // Smart Page QR Code / Direct Note Link Handler (Respects Strict Login Gate + Auto-Opens After Sign-In)
     const notePathMatch = window.location.pathname.match(/^\/note\/([^/]+)\/?$/i);
     const urlNoteId = params.get("noteId") || params.get("note") || (notePathMatch && notePathMatch[1]);
     const urlPage = parseInt(params.get("page") || "1", 10);
@@ -343,6 +377,16 @@ export default function App() {
       if (urlPage > 0) setPreviewInitialPage(urlPage);
       function applyScannedNote(foundNote) {
         if (!foundNote) return;
+        const isAuthed = Boolean(
+          currentUserRef.current ||
+          (typeof window !== "undefined" && (window.__FSM_AUTH_TOKEN__ || window.__FSM_CURRENT_USER__)) ||
+          getAuthToken()
+        );
+        if (!isAuthed) {
+          pendingNoteActionRef.current = { type: "preview", note: foundNote, initialPage: urlPage };
+          openAuth("signin");
+          return;
+        }
         setPreviewNote({ ...foundNote, _initialPage: urlPage });
         if (podParam) {
           if (podParam === "true") {
@@ -363,14 +407,24 @@ export default function App() {
           if (res?.note) applyScannedNote(res.note);
         })
         .catch(() => {
-          try {
-            const cachedNotes = safeStorage.getItem("all_raw_notes") || safeStorage.getItem("fsm_cached_notes");
-            if (cachedNotes) {
-              const list = JSON.parse(cachedNotes);
-              const found = list.find((n) => n.id === urlNoteId);
-              if (found) applyScannedNote(found);
-            }
-          } catch (_) {}
+          // Guest fallback: fetch public-meta (0 PII) so we can queue the note & prompt login smoothly
+          fetch(`/api/notes/${encodeURIComponent(urlNoteId)}/public-meta`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((metaRes) => {
+              if (metaRes?.note) {
+                applyScannedNote(metaRes.note);
+                return;
+              }
+              try {
+                const cachedNotes = safeStorage.getItem("all_raw_notes") || safeStorage.getItem("fsm_cached_notes");
+                if (cachedNotes) {
+                  const list = JSON.parse(cachedNotes);
+                  const found = list.find((n) => n.id === urlNoteId);
+                  if (found) applyScannedNote(found);
+                }
+              } catch (_) {}
+            })
+            .catch(() => {});
         });
     }
 
@@ -1216,11 +1270,27 @@ export default function App() {
               console.log("[LIVE-SYNC] ⚡ Real-time note created:", data.note.title);
               addOrUpdateNoteInCatalogAndState(data.note);
             } else if (data.event === "note_deleted" && data.noteId) {
-              console.log("[LIVE-SYNC] 🗑️ Real-time note deleted:", data.noteId);
+              console.log("[LIVE-SYNC] 🗑️ Real-time note deleted/hidden:", data.noteId);
               removeNoteFromCatalogAndState(data.noteId);
-            } else if (data.event === "catalog_synced") {
+            } else if (data.event === "note_updated" || data.event === "catalog_synced") {
               console.log("[LIVE-SYNC] 🔄 Real-time catalog reconciled:", data);
               fetchNotes(currentUserRef.current, true);
+            } else if (data.event === "control_updated") {
+              console.log("[LIVE-SYNC] 🛡️ Real-time Admin control update received:", data);
+              if (typeof data.allowNotesDownload === "boolean") {
+                setAllowNotesDownload(data.allowNotesDownload);
+              }
+              if (typeof data.downloadDisabledReason === "string") {
+                setDownloadDisabledReason(data.downloadDisabledReason);
+              }
+              if (typeof data.maintenanceMode === "boolean") {
+                setMaintenanceState((prev) => ({
+                  ...prev,
+                  active: data.maintenanceMode,
+                  title: data.maintenanceTitle || prev.title,
+                  message: data.maintenanceMessage || prev.message,
+                }));
+              }
             }
           } catch (_) {}
         };
@@ -1410,11 +1480,21 @@ export default function App() {
 
   const handleTableDownload = async (note) => {
     if (!currentUser) {
+      pendingNoteActionRef.current = { type: "preview", note, initialPage: 1 };
       openAuth("signin");
       return;
     }
+    const isAdminUser = Boolean(
+      currentUser?.role === "admin" ||
+      currentUser?.role === "half_admin" ||
+      currentUser?.isMainAdmin ||
+      currentUser?.isMasterAdmin ||
+      (Array.isArray(currentUser?.permissions) && currentUser.permissions.includes("all"))
+    );
     const isSingleNoteDisabled = note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0";
-    const isNoteDownloadBlocked = Boolean(!allowNotesDownload || allowNotesDownload === "false" || isSingleNoteDisabled);
+    const isNoteDownloadBlocked = isAdminUser
+      ? Boolean(isSingleNoteDisabled)
+      : Boolean(!allowNotesDownload || allowNotesDownload === "false" || isSingleNoteDisabled);
     if (isNoteDownloadBlocked) {
       const reasonMsg = note.downloadDisabledReason || downloadDisabledReason || (isSingleNoteDisabled ? "Downloads for this specific note have been disabled by the administrator. You can still read notes in the Online Reader." : "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.");
       alert(reasonMsg);
@@ -1693,7 +1773,7 @@ export default function App() {
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
         notes={notes}
-        onPreview={setPreviewNote}
+        onPreview={handleGuardedPreviewNote}
         onOpenUpload={() => {
           if (!currentUser) {
             openAuth("signup");
@@ -2365,7 +2445,7 @@ export default function App() {
                       <NoteCard
                         key={note.id}
                         note={note}
-                        onPreview={setPreviewNote}
+                        onPreview={handleGuardedPreviewNote}
                         currentUser={currentUser}
                         allowNotesDownload={allowNotesDownload}
                         downloadDisabledReason={downloadDisabledReason}
@@ -2454,18 +2534,7 @@ export default function App() {
                                 <button
                                   className="btn-card-preview"
                                   style={{ width: "32px", height: "32px" }}
-                                  onClick={() => {
-                                    const isAuthed = Boolean(
-                                      currentUser ||
-                                      (typeof window !== "undefined" && (window.__FSM_AUTH_TOKEN__ || window.__FSM_CURRENT_USER__)) ||
-                                      getAuthToken()
-                                    );
-                                    if (!isAuthed) {
-                                      openAuth("signin");
-                                      return;
-                                    }
-                                    setPreviewNote(note);
-                                  }}
+                                  onClick={() => handleGuardedPreviewNote(note)}
                                   title="Preview Document"
                                 >
                                   👁️
@@ -2749,6 +2818,7 @@ export default function App() {
             onAuthSuccess={(user) => {
               setAutoLogoutNotice(null);
               setCurrentUser(user);
+              currentUserRef.current = user;
               setIsAuthOpen(false);
               safeStorage.setItem("vault_last_active", String(Date.now()));
               try {
@@ -2757,6 +2827,20 @@ export default function App() {
                 window.history.replaceState({}, document.title, cleanUrl.pathname + (cleanUrl.search ? cleanUrl.search : ""));
               } catch (_) {}
               fetchNotes(user);
+
+              // ⚡ Auto-Resume: If guest clicked Read/Download on a note before signing in, open it immediately!
+              const pending = pendingNoteActionRef.current;
+              if (pending && pending.note) {
+                pendingNoteActionRef.current = null;
+                if (pending.initialPage && pending.initialPage > 1) {
+                  setPreviewInitialPage(pending.initialPage);
+                }
+                setPreviewNote(
+                  pending.initialPage && pending.initialPage > 1
+                    ? { ...pending.note, _initialPage: pending.initialPage }
+                    : pending.note
+                );
+              }
             }}
           />
         )}
