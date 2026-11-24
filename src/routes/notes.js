@@ -1407,6 +1407,10 @@ router.get("/:id/access", downloadLimiter, authenticateToken, async (req, res) =
           message: noteData.downloadDisabledReason || globalReason,
         });
       }
+
+      // ⚡ Track download count for Cloudflare Edge HIT & Tier 1 IndexedDB verified downloads (batched every 3m, 0 immediate DB writes!)
+      noteData.downloadsCount = (Number(noteData.downloadsCount) || 0) + 1;
+      queueBatchedNoteDownloadIncrement(id, noteData.downloadsCount);
     }
 
     return res.json({ success: true, allowed: true });
@@ -2155,6 +2159,61 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
 
     const isActualDownload = Boolean(isDownload);
 
+    // 🔒 Master & Per-Note Download Gate Protection (MUST run BEFORE 302 Edge Offload Redirect & Telegram Download Alerts!)
+    const isSingleNoteDisabled = note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0";
+    const isNoteDownloadDisabled = Boolean(isSingleNoteDisabled);
+
+    const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
+    const isDownloadAdmin = requestingUser && (
+      requestingUser.role === "admin" ||
+      requestingUser.role === "half_admin" ||
+      requestingUser.role === "sub_admin" ||
+      requestingUser.isMainAdmin ||
+      requestingUser.isMasterAdmin ||
+      requestingUser.id === "admin-root" ||
+      Boolean(adminEmail && requestingUser.email && requestingUser.email.toLowerCase().trim() === adminEmail) ||
+      (Array.isArray(requestingUser.permissions) && requestingUser.permissions.includes("all"))
+    );
+    const isAdminInspectBypass = isDownloadAdmin && req.query.admin_inspect === "1";
+
+    if (isDownload) {
+      let downloadAllowed = true;
+      let pauseReason = "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.";
+      try {
+        const adminRoutes = require("./admin");
+        if (adminRoutes.isDownloadAllowed) {
+          downloadAllowed = adminRoutes.isDownloadAllowed();
+        }
+        if (adminRoutes.getTechSettings) {
+          const tSet = adminRoutes.getTechSettings();
+          if (tSet && tSet.downloadDisabledReason) pauseReason = tSet.downloadDisabledReason;
+        }
+      } catch (_) {}
+
+      const effectiveReason = note.downloadDisabledReason || pauseReason;
+      // Match /access & Frontend policy: Admins can still download unlocked notes during a global student download pause
+      const isBlockedForCaller = isDownloadAdmin
+        ? isNoteDownloadDisabled
+        : Boolean(!downloadAllowed || isNoteDownloadDisabled);
+
+      if (isBlockedForCaller && !isAdminInspectBypass) {
+        const isHtmlRequest =
+          req.headers["sec-fetch-dest"] === "document" ||
+          req.headers["sec-fetch-mode"] === "navigate" ||
+          Boolean(req.headers["accept"] && req.headers["accept"].includes("text/html"));
+
+        if (isHtmlRequest) {
+          return res.status(403).send(renderDownloadPausedHtml(note.title, note.id || id, effectiveReason));
+        }
+
+        return res.status(403).json({
+          success: false,
+          downloadsDisabled: true,
+          message: effectiveReason,
+        });
+      }
+    }
+
     // ⚡ Zero-Render Bandwidth Offloader:
     // When downloading a PDF, redirect top-level browser downloads to Cloudflare Edge Worker CDN unless the request came from the worker itself,
     // or is an explicit direct request (e.g. Tier 3 fallback), or an internal API fetch request.
@@ -2166,8 +2225,8 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       req.headers["cf-worker"] ||
       req.headers["x-via-worker"] ||
       req.headers["x-worker-signature"] ||
-      (req.headers["x-forwarded-host"] && (req.headers["x-forwarded-host"].includes("workers.dev") || req.headers["x-forwarded-host"].includes("pages.dev"))) ||
-      (req.headers["referer"] && req.headers["referer"].includes("pages.dev"))
+      (req.headers["x-forwarded-host"] && isTrustedHostUrl(req.headers["x-forwarded-host"], req.headers["host"] || "")) ||
+      (req.headers["referer"] && isTrustedHostUrl(req.headers["referer"], req.headers["host"] || ""))
     );
     const isExplicitDirect = req.query.direct === "1" || req.headers["x-direct-origin"] === "1";
     const isFetchOrApi = Boolean(
@@ -2267,53 +2326,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       note.mimeType === "application/octet-stream";
     const contentType = isPdf ? "application/pdf" : (note.mimeType || "application/pdf");
 
-    // isDownload already resolved at route inception
-    const isSingleNoteDisabled = note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0";
-    const isNoteDownloadDisabled = Boolean(isSingleNoteDisabled);
-
-    const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
-    const isDownloadAdmin = requestingUser && (
-      requestingUser.role === "admin" ||
-      requestingUser.role === "half_admin" ||
-      Boolean(adminEmail && requestingUser.email && requestingUser.email.toLowerCase().trim() === adminEmail)
-    );
-    const isAdminInspectBypass = isDownloadAdmin && req.query.admin_inspect === "1";
-
-    // 🔒 Master & Per-Note Download Gate Protection
-    if (isDownload) {
-      let downloadAllowed = true;
-      let pauseReason = "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.";
-      try {
-        const adminRoutes = require("./admin");
-        if (adminRoutes.isDownloadAllowed) {
-          downloadAllowed = adminRoutes.isDownloadAllowed();
-        }
-        if (adminRoutes.getTechSettings) {
-          const tSet = adminRoutes.getTechSettings();
-          if (tSet && tSet.downloadDisabledReason) pauseReason = tSet.downloadDisabledReason;
-        }
-      } catch (_) {}
-
-      const effectiveReason = note.downloadDisabledReason || pauseReason;
-
-      if ((!downloadAllowed || isNoteDownloadDisabled) && !isAdminInspectBypass) {
-        const isHtmlRequest =
-          req.headers["sec-fetch-dest"] === "document" ||
-          req.headers["sec-fetch-mode"] === "navigate" ||
-          Boolean(req.headers["accept"] && req.headers["accept"].includes("text/html"));
-
-        if (isHtmlRequest) {
-          return res.status(403).send(renderDownloadPausedHtml(note.title, note.id || id, effectiveReason));
-        }
-
-        return res.status(403).json({
-          success: false,
-          downloadsDisabled: true,
-          message: effectiveReason,
-        });
-      }
-    }
-
+    // Download policy already enforced before 302 Edge Offload Redirect & Telegram alerts
     const dispositionType = (isDownload && (!isNoteDownloadDisabled || isAdminInspectBypass)) ? "attachment" : "inline";
 
     res.setHeader("Content-Type", contentType);
@@ -2372,13 +2385,15 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     }
 
     // 🚀 1. Resolve Server SSD / RAM Buffer metadata upfront (safe for both HEAD & GET)
+    // NOTE: getCdnBuffer() validates & auto-purges corrupt/partial files, so NEVER trust stale isDiskCached from earlier!
     const cached = getCdnBuffer(id);
+    const hasValidDiskFile = Boolean(cached && cached.isDiskOnly && cached.binPath && fs.existsSync(cached.binPath));
 
     // ⚡ Instant HEAD response for preflight metadata checks (0ms, 0 byte overhead)
     if (req.method === "HEAD") {
       let headSize = note.fileSize || note.compressedSize || 0;
-      if (isDiskCached) {
-        try { headSize = fs.statSync(binPath).size; } catch (_) {}
+      if (hasValidDiskFile) {
+        try { headSize = fs.statSync(cached.binPath).size; } catch (_) {}
       } else if (cached?.totalSize) {
         headSize = cached.totalSize;
       }
@@ -2388,7 +2403,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
         res.setHeader("X-Real-Source", "RAM_BUFFER");
         res.setHeader("X-Source-Label", "In-Memory RAM Buffer (0ms Microsecond)");
         res.setHeader("CF-Cache-Status", "HIT");
-      } else if (isDiskCached) {
+      } else if (hasValidDiskFile) {
         res.setHeader("X-Real-Source", "DISK_CACHE");
         res.setHeader("X-Source-Label", "Local SSD Disk Cache (1ms High-Speed)");
         res.setHeader("CF-Cache-Status", "HIT");
@@ -2400,7 +2415,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       return res.status(200).end();
     }
 
-    if (isDiskCached || cached) {
+    if (hasValidDiskFile || (cached && cached.buffer)) {
       // ⚡ If found on disk or RAM, make sure DB & L1 cache have isCdnCached: true
       if (!note.isCdnCached) {
         const cachedIso = new Date().toISOString();
@@ -2432,9 +2447,9 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       res.setHeader("Cache-Control", "public, max-age=604800, s-maxage=604800, immutable");
 
       let totalSize = cached?.totalSize || 0;
-      if (isDiskCached && !totalSize) {
+      if (hasValidDiskFile && !totalSize) {
         try {
-          totalSize = fs.statSync(binPath).size;
+          totalSize = fs.statSync(cached.binPath).size;
         } catch (_) {
           totalSize = 0;
         }
@@ -2457,9 +2472,9 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
         res.setHeader("Content-Range", `bytes ${start}-${end}/${totalSize}`);
         res.setHeader("Content-Length", contentLength);
 
-        if (isDiskCached) {
+        if (hasValidDiskFile) {
           // ⚡ Pillar 3: Zero-Copy Stream Pipelining (0% RAM / 0% CPU kernel file-descriptor pipe)
-          const fileStream = fs.createReadStream(binPath, { start, end });
+          const fileStream = fs.createReadStream(cached.binPath, { start, end });
           const cleanup = () => {
             if (!fileStream.destroyed) fileStream.destroy();
           };
@@ -2477,9 +2492,9 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
         res.status(200);
         res.setHeader("Content-Length", totalSize);
 
-        if (isDiskCached) {
+        if (hasValidDiskFile) {
           // ⚡ Pillar 3: Zero-Copy Stream Pipelining for full file transfer
-          const fileStream = fs.createReadStream(binPath);
+          const fileStream = fs.createReadStream(cached.binPath);
           const cleanup = () => {
             if (!fileStream.destroyed) fileStream.destroy();
           };

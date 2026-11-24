@@ -409,6 +409,53 @@ export async function acquireNoteDocument(noteId, {
       new Promise((resolve) => setTimeout(() => resolve(null), 2000)),
     ]);
     if (localBuf && isValidPdfArrayBuffer(localBuf)) {
+      // 🔒 When downloading from Tier 1 IndexedDB, verify live download permission (if online) so Admin locks cannot be bypassed and stats stay accurate!
+      if (mode === "download") {
+        const localSingleBlocked =
+          note?.allowDownload === false ||
+          note?.allowDownload === "false" ||
+          note?.allowDownload === 0 ||
+          note?.allowDownload === "0";
+        if (localSingleBlocked) {
+          const lockErr = new Error(
+            note?.downloadDisabledReason ||
+            "Downloads for this specific note have been disabled by the administrator. You can still read all pages in the Online Reader."
+          );
+          lockErr.status = 403;
+          throw lockErr;
+        }
+        const isOnline = typeof navigator === "undefined" ? true : navigator.onLine !== false;
+        if (isOnline) {
+          try {
+            const accessCtrl = new AbortController();
+            const accessTimer = setTimeout(() => accessCtrl.abort(), 2500);
+            const accessUrl = `/api/notes/${cleanId}/access?download=1${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}`;
+            const accessRes = await fetch(accessUrl, {
+              method: "GET",
+              headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+              credentials: "include",
+              signal: accessCtrl.signal,
+            });
+            clearTimeout(accessTimer);
+            if (!accessRes.ok && (accessRes.status === 401 || accessRes.status === 403 || accessRes.status === 404)) {
+              let msg = `Download blocked (${accessRes.status})`;
+              try {
+                const j = await accessRes.json();
+                if (j?.message) msg = j.message;
+              } catch (_) {}
+              const denyErr = new Error(msg);
+              denyErr.status = accessRes.status;
+              throw denyErr;
+            }
+          } catch (accessErr) {
+            if (accessErr && (accessErr.status === 401 || accessErr.status === 403 || accessErr.status === 404)) {
+              throw accessErr;
+            }
+            // Network timeout / offline: proceed with local offline vault buffer
+          }
+        }
+      }
+
       // 🎉 TIER 1 CACHE HIT (0ms)!
       onProgress({
         tier: 1,
@@ -431,6 +478,9 @@ export async function acquireNoteDocument(noteId, {
       return { buffer: localBuf, blob, source: "local", tier: 1 };
     }
   } catch (t1Err) {
+    if (t1Err && (t1Err.status === 401 || t1Err.status === 403 || t1Err.status === 404)) {
+      throw t1Err;
+    }
     console.debug("[WATERFALL] Tier 1 cache lookup notice:", t1Err.message);
   }
 
@@ -521,10 +571,23 @@ export async function acquireNoteDocument(noteId, {
           }
           return { buffer, blob, source: resolvedSource, tier: resolvedTier };
         }
+      } else if (workerRes && (workerRes.status === 401 || workerRes.status === 403 || workerRes.status === 404)) {
+        // Explicit Auth / Download Lock / Not Found denial — stop waterfall immediately, never spam Tier 3 or pop up a broken tab!
+        let denyMsg = `Document unavailable (${workerRes.status})`;
+        try {
+          const j = await workerRes.json();
+          if (j?.message) denyMsg = j.message;
+        } catch (_) {}
+        const denyErr = new Error(denyMsg);
+        denyErr.status = workerRes.status;
+        throw denyErr;
       } else if (workerRes && workerRes.status >= 500) {
         workerCooldownUntil = Date.now() + 60000;
       }
     } catch (t2Err) {
+      if (t2Err && (t2Err.status === 401 || t2Err.status === 403 || t2Err.status === 404)) {
+        throw t2Err;
+      }
       if (!(signal && signal.aborted)) {
         workerCooldownUntil = Date.now() + 60000;
       }
@@ -616,7 +679,9 @@ export async function acquireNoteDocument(noteId, {
       const errJson = await serverRes.json();
       if (errJson?.message) errMsg = errJson.message;
     } catch (_) {}
-    throw new Error(errMsg);
+    const statusErr = new Error(errMsg);
+    statusErr.status = serverRes?.status || 0;
+    throw statusErr;
   }
 
   const realSource = (serverRes.headers.get("x-real-source") || "").toUpperCase();

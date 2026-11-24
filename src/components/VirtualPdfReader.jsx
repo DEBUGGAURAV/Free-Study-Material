@@ -2097,6 +2097,10 @@ export default function VirtualPdfReader({
         return;
       }
       console.warn("[DOWNLOAD] Error downloading from reader:", err.message);
+      if (err?.status === 401 || err?.status === 403 || err?.status === 404) {
+        alert(err.message || "Download is currently unavailable for this note.");
+        return;
+      }
       if (noteId) {
         window.open(api.getDownloadUrl(noteId, fileName), "_blank");
       } else if (onDownload) {

@@ -343,26 +343,34 @@ function NoteCard({
         return;
       }
       console.warn("[DOWNLOAD] Download stream error:", err.message);
+      if (err.status === 403 || err.status === 404) {
+        alert(err.message || "Download is currently unavailable for this note.");
+        return;
+      }
       const isAuthed = Boolean(
         currentUser ||
         (typeof window !== "undefined" && (window.__FSM_AUTH_TOKEN__ || window.__FSM_CURRENT_USER__)) ||
         (typeof getAuthToken === "function" ? getAuthToken() : null)
       );
       if (
+        err.status === 401 ||
         err.message.includes("401") ||
         err.message.includes("Restricted") ||
         err.message.includes("exclusively for registered")
       ) {
-        if (!isAuthed && onRequireAuth) {
+        if (onRequireAuth) {
           onRequireAuth("signin");
         } else {
-          // Student is authenticated: fallback directly to origin stream URL with direct=1 (bypasses 302 loops)
-          window.open(api.getDownloadUrl(note.id, fileName, true), "_blank");
+          alert(err.message || "Please sign in to download notes.");
         }
-      } else {
-        // Resilient fallback to direct url
-        window.open(api.getDownloadUrl(note.id, fileName, true), "_blank");
+        return;
       }
+      if (!isAuthed) {
+        if (onRequireAuth) onRequireAuth("signin");
+        return;
+      }
+      // Resilient fallback to direct url ONLY for genuine network/streaming failures
+      window.open(api.getDownloadUrl(note.id, fileName, true), "_blank");
     } finally {
       setTimeout(() => {
         setDownloading(false);

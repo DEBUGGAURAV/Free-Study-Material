@@ -5,14 +5,24 @@
  */
 
 function isTrustedOrigin(origin) {
-  if (!origin) return false;
-  return (
-    origin.includes('pages.dev') ||
-    origin.includes('onrender.com') ||
-    origin.includes('localhost') ||
-    origin.includes('127.0.0.1') ||
-    origin.includes('workers.dev')
-  );
+  if (!origin || origin === 'null') return false;
+  try {
+    const host = new URL(origin).hostname.toLowerCase();
+    return (
+      host === 'freestudymaterial.pages.dev' ||
+      host.endsWith('.freestudymaterial.pages.dev') ||
+      host === 'freestudymaterial.onrender.com' ||
+      host === 'freestudymaterial1.onrender.com' ||
+      host === 'freestudymaterial2.onrender.com' ||
+      host === 'fsm-edge.jnplotus.workers.dev' ||
+      host === 'fsm-chat-edge.jnplotus.workers.dev' ||
+      host === 'fsm-ai-edge.jnplotus.workers.dev' ||
+      host === 'localhost' ||
+      host === '127.0.0.1'
+    );
+  } catch (_) {
+    return false;
+  }
 }
 
 function applyCors(headers, req) {
@@ -20,14 +30,12 @@ function applyCors(headers, req) {
   if (o && isTrustedOrigin(o)) {
     headers.set('Access-Control-Allow-Origin', o);
     headers.set('Access-Control-Allow-Credentials', 'true');
-  } else if (o && /^https?:\/\//i.test(o)) {
-    headers.set('Access-Control-Allow-Origin', o);
   } else {
     headers.set('Access-Control-Allow-Origin', '*');
   }
   headers.set('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS, PURGE, DELETE');
-  headers.set('Access-Control-Allow-Headers', '*');
-  headers.set('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length, Content-Range, Accept-Ranges, X-Real-Source, X-Source-Label, X-Data-Source, X-Storage-Node, CF-Cache-Status, X-Cache, X-Edge-Location, X-Edge-Cache, X-Upstream-Origin, X-Cluster-Active-Nodes');
+  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cache-Control, Range, If-None-Match, X-Direct-Origin, X-Admin-Bypass, X-Cluster-Sync');
+  headers.set('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length, Content-Range, Accept-Ranges, X-Real-Source, X-Source-Label, X-Data-Source, X-Storage-Node, CF-Cache-Status, X-Cache, X-Edge-Location, X-Edge-Cache, X-Edge-Catalog-Cache, X-Upstream-Origin, X-Cluster-Active-Nodes, ETag');
   headers.set('Access-Control-Max-Age', '86400');
 }
 
@@ -120,20 +128,19 @@ export default {
       });
     }
 
-    // 🛡️ Block Direct Cross-Site Hotlinking from unauthorized third-party domains (ALLOW pages.dev & APP_URL!)
+    // 🛡️ Block Direct Cross-Site Hotlinking from unauthorized third-party domains (ALLOW trusted origins & APP_URL!)
     const originHeader = request.headers.get('Origin') || request.headers.get('Referer') || '';
     const isDocNav = request.headers.get('Sec-Fetch-Mode') === 'navigate' || request.headers.get('Sec-Fetch-Dest') === 'document';
     const appOriginHost = (() => {
-      try { return env.APP_URL ? new URL(env.APP_URL).hostname : ''; } catch { return ''; }
+      try { return env.APP_URL ? new URL(env.APP_URL).hostname.toLowerCase() : ''; } catch { return ''; }
+    })();
+    const originHeaderHost = (() => {
+      try { return originHeader ? new URL(originHeader).hostname.toLowerCase() : ''; } catch { return ''; }
     })();
     const isAllowedClient = !originHeader ||
       isDocNav ||
-      originHeader.includes('pages.dev') ||
-      originHeader.includes('onrender.com') ||
-      originHeader.includes('localhost') ||
-      originHeader.includes('127.0.0.1') ||
-      originHeader.includes('workers.dev') ||
-      (appOriginHost && originHeader.includes(appOriginHost));
+      isTrustedOrigin(originHeader) ||
+      Boolean(appOriginHost && originHeaderHost === appOriginHost);
     if (!isAllowedClient && request.headers.get('Sec-Fetch-Site') === 'cross-site') {
       return new Response('Direct cross-site hotlinking blocked by Free Study Material Cloud.', {
         status: 403,
@@ -336,70 +343,85 @@ export default {
 
       const rangeHeader = request.headers.get('Range');
 
+      // 🛡️ STRICT LOGIN GATE ("notes sabhi ko dikhein, use wahi kar paaye jo login ho"):
+      // Block unauthenticated PDF read & download requests IMMEDIATELY at Cloudflare Edge on BOTH Cache HIT & Cache MISS (0 Render load!)
+      const cookieHeader = request.headers.get('cookie') || '';
+      const queryTokenEarly = url.searchParams.get('token');
+      const hasAnyCredentialEarly = Boolean(
+        request.headers.get('authorization') ||
+        /(?:^|;\s*)(?:fsm_token|fsm_admin_token|admin_token|token|vault_token)=/.test(cookieHeader) ||
+        url.searchParams.get('ticket') ||
+        (queryTokenEarly && queryTokenEarly !== 'null' && queryTokenEarly !== 'undefined')
+      );
+      if (!hasAnyCredentialEarly) {
+        const headers = new Headers({
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+        });
+        applyCors(headers, request);
+        return new Response(JSON.stringify({
+          success: false,
+          authRequired: true,
+          message: 'Restricted Access: Please sign in or register to read or download notes.',
+        }), { status: 401, headers });
+      }
+
       // Check Cloudflare Edge Cache first
       let cachedResponse = await cache.match(cacheKey);
       if (cachedResponse) {
         const noteId = url.pathname.match(/^\/api\/notes\/([^/]+)\//)?.[1];
         if (noteId && (request.method === 'GET' || request.method === 'HEAD')) {
-          const accessUrl = new URL(`/api/notes/${encodeURIComponent(noteId)}/access`, originBase);
-          for (const name of ['ticket', 'download', 'attachment']) {
-            const value = url.searchParams.get(name);
-            if (value) accessUrl.searchParams.set(name, value);
-          }
-
           const accessHeaders = new Headers();
           for (const name of ['authorization', 'cookie', 'cf-connecting-ip', 'x-forwarded-for']) {
             const value = request.headers.get(name);
             if (value) accessHeaders.set(name, value);
           }
-          const queryToken = url.searchParams.get('token');
-          if (!accessHeaders.has('authorization') && queryToken) {
-            accessHeaders.set('Authorization', `Bearer ${queryToken}`);
+          if (!accessHeaders.has('authorization') && queryTokenEarly) {
+            accessHeaders.set('Authorization', `Bearer ${queryTokenEarly}`);
           }
 
-          // 🛡️ STRICT LOGIN GATE: Block unauthenticated requests immediately at Edge (0 origin load!)
-          const hasAnyCredential = Boolean(
-            accessHeaders.has('authorization') ||
-            accessHeaders.has('cookie') ||
-            url.searchParams.get('ticket') ||
-            queryToken
-          );
-          if (!hasAnyCredential) {
-            const headers = new Headers({
-              'Content-Type': 'application/json',
-              'Cache-Control': 'no-store',
-            });
-            applyCors(headers, request);
-            return new Response(JSON.stringify({
-              success: false,
-              authRequired: true,
-              message: 'Restricted Access: Please sign in or register to read or download notes.',
-            }), { status: 401, headers });
-          }
-
-          try {
-            const accessController = new AbortController();
-            const accessTimer = setTimeout(() => accessController.abort(), 2500);
-            const accessResponse = await fetch(accessUrl, {
-              method: 'GET',
-              headers: accessHeaders,
-              redirect: 'manual',
-              signal: accessController.signal,
-            });
-            clearTimeout(accessTimer);
-            if (!accessResponse.ok) {
-              const headers = new Headers(accessResponse.headers);
-              headers.set('Cache-Control', 'no-store');
-              applyCors(headers, request);
-              return new Response(accessResponse.body, {
-                status: accessResponse.status,
-                headers,
-              });
+          let accessVerified = false;
+          for (const accOrigin of streamOrigins) {
+            const accessUrl = new URL(`/api/notes/${encodeURIComponent(noteId)}/access`, accOrigin);
+            for (const name of ['ticket', 'download', 'attachment']) {
+              const value = url.searchParams.get(name);
+              if (value) accessUrl.searchParams.set(name, value);
             }
-          } catch (_) {
-            // If origin /access check times out during Render spin-up:
-            // Only allow verified-credential preview hits (never unauthenticated guests, never downloads when lock status unknown)
-            if (url.searchParams.get('download') === '1' || !hasAnyCredential) {
+            try {
+              const accessController = new AbortController();
+              const accessTimer = setTimeout(() => accessController.abort(), 3000);
+              const accessResponse = await fetch(accessUrl, {
+                method: 'GET',
+                headers: accessHeaders,
+                redirect: 'manual',
+                signal: accessController.signal,
+              });
+              clearTimeout(accessTimer);
+              if (accessResponse.ok) {
+                markOriginUp(accOrigin);
+                accessVerified = true;
+                break;
+              }
+              if (accessResponse.status >= 400 && accessResponse.status < 500) {
+                // Intentional denial (401/403/404) — NEVER mark origin down, return immediately!
+                markOriginUp(accOrigin);
+                const headers = new Headers(accessResponse.headers);
+                headers.set('Cache-Control', 'no-store');
+                applyCors(headers, request);
+                return new Response(accessResponse.body, {
+                  status: accessResponse.status,
+                  headers,
+                });
+              }
+              markOriginDown(accOrigin);
+            } catch (_) {
+              markOriginDown(accOrigin);
+            }
+          }
+
+          if (!accessVerified) {
+            // Fail closed on downloads or if all origin nodes are unreachable so locks/revocations are never bypassed
+            if (url.searchParams.get('download') === '1') {
               const headers = new Headers({
                 'Content-Type': 'application/json',
                 'Cache-Control': 'no-store',
@@ -407,11 +429,8 @@ export default {
               applyCors(headers, request);
               return new Response(JSON.stringify({
                 success: false,
-                message: 'Could not verify note access right now. Please retry in a moment.',
-              }), {
-                status: hasAnyCredential ? 503 : 401,
-                headers,
-              });
+                message: 'Could not verify download permission right now. Please retry in a moment.',
+              }), { status: 503, headers });
             }
           }
         }
@@ -500,10 +519,20 @@ export default {
           const res = await fetch(originReq);
           const cType = (res.headers.get('content-type') || '').toLowerCase();
           const routingHeader = res.headers.get('x-render-routing') || '';
-          const isErrorStatus = res.status >= 500 || res.status === 502 || res.status === 503 || res.status === 504 || res.status === 402 || res.status === 403;
+
+          // 🛡️ Intentional 4xx responses (401 Unauth, 403 Download Locked/Paused, 404 Not Found):
+          // NEVER mark a healthy Render node down and NEVER waste failover retries across all 3 nodes!
+          if (res.status === 401 || res.status === 403 || res.status === 404) {
+            markOriginUp(curOrigin);
+            originRes = res;
+            activeOriginUsed = curOrigin;
+            break;
+          }
+
+          const isErrorStatus = res.status >= 500 || res.status === 502 || res.status === 503 || res.status === 504 || res.status === 402;
           const isHtmlError = cType.includes('text/html') || routingHeader.includes('suspend');
 
-          if ((isErrorStatus || isHtmlError)) {
+          if (isErrorStatus || isHtmlError) {
             markOriginDown(curOrigin);
             if (i < streamOrigins.length - 1) {
               continue; // Cascade failover immediately to next online backend node!
@@ -656,101 +685,22 @@ export default {
       }
     }
 
-    // 4. Direct Telegram Bot API stream endpoint: /stream/:fileId?name=xyz.pdf
+    // 4. Legacy raw Telegram fileId endpoint disabled for strict security
+    // All document previews & downloads MUST pass through authenticated /api/notes/:id/stream.pdf with download-lock & visibility enforcement!
     if (url.pathname.startsWith('/stream')) {
-      const parts = url.pathname.split('/').filter(Boolean);
-      const fileId = parts[1] || url.searchParams.get('fileId');
-      const filename = url.searchParams.get('filename') || url.searchParams.get('name') || 'document.pdf';
-
-      if (!fileId) {
-        return new Response('Missing fileId parameter', { 
-          status: 400,
-          headers: { 'Access-Control-Allow-Origin': '*' }
-        });
-      }
-
-      const cache = caches.default;
-      const cacheKey = new Request(url.toString(), request);
-
-      // Check Edge Cache first (0ms latency if cached in local edge)
-      let cachedResponse = await cache.match(cacheKey);
-      if (cachedResponse) {
-        const responseHeaders = new Headers(cachedResponse.headers);
-        responseHeaders.set('X-Real-Source', 'CLOUDFLARE_WORKER');
-        responseHeaders.set('X-Source-Label', `Cloudflare Edge Worker (${edgeColo} CDN Cache)`);
-        responseHeaders.set('X-Edge-Cache', 'HIT');
-        responseHeaders.set('CF-Cache-Status', 'HIT');
-        responseHeaders.set('X-Edge-Location', edgeColo);
-        responseHeaders.set('Access-Control-Allow-Origin', '*');
-        responseHeaders.set('Access-Control-Expose-Headers', '*');
-        return new Response(cachedResponse.body, {
-          status: cachedResponse.status,
-          headers: responseHeaders,
-        });
-      }
-
-      // Cache Miss: Fetch from Telegram Bot API using secret bot token
-      const botToken = env.TELEGRAM_BOT_TOKEN;
-      if (!botToken) {
-        // Fallback: proxy to origin server
-        const originReqUrl = new URL(url.pathname + url.search, originBase);
-        return fetch(originReqUrl.toString(), request);
-      }
-
-      try {
-        // Step A: Resolve file path from Telegram Bot API
-        const getFileUrl = `https://api.telegram.org/bot${botToken}/getFile?file_id=${encodeURIComponent(fileId)}`;
-        const fileMetaRes = await fetch(getFileUrl);
-        const fileMeta = await fileMetaRes.json();
-
-        if (!fileMeta.ok || !fileMeta.result?.file_path) {
-          return new Response(`Cloud vault file resolution notice: ${fileMeta.description || 'Not found'}`, { 
-            status: 404,
-            headers: { 'Access-Control-Allow-Origin': '*' }
-          });
-        }
-
-        const filePath = fileMeta.result.file_path;
-        const tgDownloadUrl = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
-
-        // Step B: Stream file from upstream core storage
-        const fileStreamRes = await fetch(tgDownloadUrl);
-        if (!fileStreamRes.ok) {
-          return new Response('Failed to stream file from academic cloud upstream storage', { 
-            status: 502,
-            headers: { 'Access-Control-Allow-Origin': '*' }
-          });
-        }
-
-        // Step C: Build Edge Cached Response (7-day caching)
-        const headers = new Headers();
-        headers.set('Content-Type', fileStreamRes.headers.get('Content-Type') || 'application/pdf');
-        const isDownload = url.searchParams.get('download') === '1';
-        const disposition = isDownload ? 'attachment' : 'inline';
-        headers.set('Content-Disposition', `${disposition}; filename="${encodeURIComponent(filename)}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
-        headers.set('Cache-Control', 'public, max-age=604800, s-maxage=604800');
-        headers.set('X-Real-Source', 'ACADEMIC_CLOUD_VAULT');
-        headers.set('X-Source-Label', 'Primary Academic Cloud Storage (Encrypted Vault)');
-        headers.set('X-Edge-Cache', 'MISS');
-        headers.set('X-Edge-Location', edgeColo);
-        headers.set('Access-Control-Allow-Origin', '*');
-        headers.set('Access-Control-Expose-Headers', '*');
-
-        const streamResponse = new Response(fileStreamRes.body, {
-          status: 200,
-          headers,
-        });
-
-        // Store in Cloudflare global edge cache asynchronously
-        ctx.waitUntil(cache.put(cacheKey, streamResponse.clone()));
-
-        return streamResponse;
-      } catch (err) {
-        return new Response(`Worker stream exception: ${err.message}`, { 
-          status: 500,
-          headers: { 'Access-Control-Allow-Origin': '*' }
-        });
-      }
+      const headers = new Headers({
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
+      });
+      applyCors(headers, request);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          authRequired: true,
+          message: 'Direct raw file streaming is disabled. Please open notes through the authenticated Free Study Material portal.',
+        }),
+        { status: 403, headers }
+      );
     }
 
     // 4.5. ⚡ Zero-Load Edge Catalog Cache for Public Read-Only Endpoints (0 Render CPU & 0 DB Reads!)
