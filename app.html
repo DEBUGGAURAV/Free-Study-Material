@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <script>
+      if (window.location.pathname.startsWith('/dist')) {
+        window.location.replace('/notes');
+      }
+      (function() {
+        try {
+          if (localStorage.getItem('fsm_theme') === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            document.documentElement.classList.add('dark-theme');
+            var meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute('content', '#090d16');
+          }
+        } catch (_) {}
+      })();
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#f5f8ff" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+    <meta name="description" content="Free Study Material Vault — Browse B.Tech, BCA, MCA, Diploma handwritten notes, previous year question papers, lab manuals, and AI study tools across CSE, ECE, IT, ME, and more." />
+    <meta name="keywords" content="free study material, btech notes, engineering notes pdf, cse notes, aktu notes, previous year question papers, handwritten lecture notes, ai study pod" />
+    <link rel="canonical" href="https://freestudymaterial.pages.dev/notes" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Free Study Material" />
+    <meta property="og:title" content="Notes Vault — Free Study Material Academic Cloud" />
+    <meta property="og:description" content="Browse student-shared handwritten notes, previous year question papers, and exam resources. Sign in free to read, download, and study with AI." />
+    <meta property="og:url" content="https://freestudymaterial.pages.dev/notes" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Notes Vault — Free Study Material Academic Cloud" />
+    <meta name="twitter:description" content="Free engineering & college study notes, PYQs, and interactive AI revision tools." />
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://accounts.google.com" crossorigin />
+    <link rel="dns-prefetch" href="https://accounts.google.com" />
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <title>Notes Vault — Free Study Material Academic Cloud</title>
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/favicon.ico" />
+  </head>
+  <body>
+    <div id="root">
+      <div id="initial-vault-loader" style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(145deg,#fff,#f5f8ff);color:#172338;font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;text-align:center;padding:24px;box-sizing:border-box;">
+        <div style="width:46px;height:46px;border:3px solid rgba(67,97,238,0.16);border-top:3px solid #4361ee;border-radius:50%;animation:fsm-spin 0.8s linear infinite;margin-bottom:18px;"></div>
+        <div style="font-size:1.15rem;font-weight:800;color:#1d2b42;letter-spacing:-0.02em;margin-bottom:6px;">Free Study Material Vault</div>
+        <div style="font-size:0.82rem;color:#526179;max-width:320px;line-height:1.5;">Connecting to Academic Cloud &amp; Indian Edge CDN...</div>
+        <div id="initial-vault-emergency" style="display:none;margin-top:16px;">
+          <button id="initial-vault-emergency-btn" style="background:linear-gradient(110deg,#4361ee,#347bc8);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:0.82rem;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(67,97,238,0.24);">
+            ⚡ Refresh &amp; Clear App Cache
+          </button>
+        </div>
+      </div>
+      <style>
+        @keyframes fsm-spin { to { transform: rotate(360deg); } }
+      </style>
+      <script>
+        window.emergencyVaultReset = function() {
+          try {
+            if ('caches' in window) {
+              caches.keys().then(function(names) { names.forEach(function(n) { caches.delete(n); }); });
+            }
+            if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.getRegistrations().then(function(regs) { regs.forEach(function(r) { r.unregister(); }); });
+            }
+            sessionStorage.clear();
+          } catch (_) {}
+          window.location.replace('/notes?fresh=' + Date.now());
+        };
+        setTimeout(function() {
+          var emergencyEl = document.getElementById('initial-vault-emergency');
+          if (emergencyEl && document.getElementById('initial-vault-loader')) {
+            emergencyEl.style.display = 'block';
+            var emergencyBtn = document.getElementById('initial-vault-emergency-btn');
+            if (emergencyBtn) {
+              emergencyBtn.addEventListener('click', function() {
+                if (window.emergencyVaultReset) window.emergencyVaultReset();
+              });
+            }
+          }
+        }, 3000);
+      </script>
+    </div>
+    <script>
+      function cacheAllActiveResources() {
+        if (!navigator.serviceWorker || !navigator.serviceWorker.controller || !navigator.onLine) return;
+        try {
+          const entries = performance.getEntriesByType('resource');
+          const urls = entries
+            .map(function(e) { return e.name; })
+            .filter(function(src) {
+              try {
+                var u = new URL(src);
+                if (u.origin !== window.location.origin) return false;
+                if (u.pathname.startsWith('/api/') || u.pathname.startsWith('/ws')) return false;
+                if (u.pathname.startsWith('/src/') || u.pathname.startsWith('/@') || u.pathname.startsWith('/node_modules/') || u.pathname.endsWith('.jsx') || u.pathname.endsWith('.tsx') || u.searchParams.has('t')) return false;
+                return true;
+              } catch (_) { return false; }
+            });
+
+          Array.from(document.querySelectorAll('link[rel="stylesheet"], script[src]')).forEach(function(el) {
+            var s = el.href || el.src;
+            if (s && s.startsWith(window.location.origin)) {
+              try {
+                var u = new URL(s);
+                if (!u.pathname.startsWith('/src/') && !u.pathname.startsWith('/@') && !u.pathname.startsWith('/node_modules/') && !u.pathname.endsWith('.jsx') && !u.pathname.endsWith('.tsx')) {
+                  urls.push(s);
+                }
+              } catch (_) {}
+            }
+          });
+
+          urls.push(window.location.origin + '/app.html');
+          urls.push(window.location.origin + '/manifest.json');
+
+          navigator.serviceWorker.controller.postMessage({
+            type: 'CACHE_APP_SHELL',
+            urls: Array.from(new Set(urls))
+          });
+        } catch (_) {}
+      }
+      window.cacheAllActiveResources = cacheAllActiveResources;
+
+      if ('serviceWorker' in navigator) {
+        var registerSW = function() {
+          navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then(function(reg) {
+            reg.update().catch(function() {});
+            if (reg.waiting) {
+              reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+            }
+            reg.addEventListener('updatefound', function() {
+              var newWorker = reg.installing;
+              if (newWorker) {
+                newWorker.addEventListener('statechange', function() {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                  }
+                });
+              }
+            });
+            if ('periodicSync' in reg) {
+              try {
+                navigator.permissions.query({ name: 'periodic-background-sync' }).then(function(status) {
+                  if (status.state === 'granted') {
+                    reg.periodicSync.register('fsm-exam-prefetch', { minInterval: 12 * 60 * 60 * 1000 }).catch(function() {});
+                  }
+                }).catch(function() {});
+              } catch (_) {}
+            }
+            setTimeout(cacheAllActiveResources, 1200);
+            window.addEventListener('load', function() { setTimeout(cacheAllActiveResources, 1500); });
+          }).catch(function() {});
+        };
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+          registerSW();
+        } else {
+          document.addEventListener('DOMContentLoaded', registerSW);
+        }
+        navigator.serviceWorker.addEventListener('controllerchange', function() {
+          setTimeout(cacheAllActiveResources, 500);
+        });
+      }
+    </script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

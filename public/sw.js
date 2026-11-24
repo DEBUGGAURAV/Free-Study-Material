@@ -4,12 +4,13 @@
  * Zero-Blank-Screen Offline Guarantee (Supports Vite Dev & Production Bundles)
  */
 
-const CACHE_NAME = 'fsm-cache-v32';
+const CACHE_NAME = 'fsm-cache-v33';
 
 // Pre-cached core assets guaranteed to exist in all environments
 const PRECACHE_CORE = [
   '/',
   '/index.html',
+  '/app.html',
   '/manifest.json',
   '/favicon.ico',
 ];
@@ -112,31 +113,32 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 1. Navigation requests (SPA Shell fallback - 100% Bulletproof Offline Launch)
+  // 1. Navigation requests (Hybrid Static Landing '/' + SPA Shell '/app.html' Offline Launch)
   if (request.mode === 'navigate') {
     event.respondWith(
       (async () => {
+        const isLandingPath = url.pathname === '/' || url.pathname === '/index.html';
         try {
           const networkResponse = await fetch(request);
           if (networkResponse && networkResponse.status === 200) {
             const ct = networkResponse.headers.get('content-type') || '';
             if (ct.includes('text/html')) {
               const cache = await caches.open(CACHE_NAME);
-              const c1 = networkResponse.clone();
-              const c2 = networkResponse.clone();
-              cache.put('/index.html', c1).catch(() => {});
-              cache.put('/', c2).catch(() => {});
+              if (isLandingPath) {
+                cache.put('/index.html', networkResponse.clone()).catch(() => {});
+                cache.put('/', networkResponse.clone()).catch(() => {});
+              } else {
+                cache.put('/app.html', networkResponse.clone()).catch(() => {});
+              }
             }
           }
           return networkResponse;
         } catch (err) {
           console.log('[SW] 📴 Offline: Serving cached navigation shell for', request.url);
           const cache = await caches.open(CACHE_NAME);
-          const cached =
-            (await cache.match(request)) ||
-            (await cache.match(url.pathname)) ||
-            (await cache.match('/index.html')) ||
-            (await cache.match('/'));
+          const cached = isLandingPath
+            ? ((await cache.match('/')) || (await cache.match('/index.html')) || (await cache.match('/app.html')))
+            : ((await cache.match('/app.html')) || (await cache.match(request)) || (await cache.match('/index.html')));
           if (cached) return cached;
 
           // Emergency inline fallback if first visit ever is offline

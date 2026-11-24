@@ -345,12 +345,16 @@ export default function App() {
     window.addEventListener("open_circle_search", handleOpenCircleSearchEvent);
     window.addEventListener("open_auth_modal", handleOpenAuthModal);
 
-    // Auto-open chat, help, study pod, or specific note page if URL has matching parameter
+    // Auto-open chat, help, notices, study pod, or specific note page if URL path or query matches
     const params = new URLSearchParams(window.location.search);
-    if (params.get("chat") || params.get("code") || params.get("chat_join")) {
+    const curPath = window.location.pathname.replace(/\/+$/, "") || "/";
+    if (curPath === "/notices") {
+      setIsNoticeBoardOpen(true);
+    }
+    if (curPath === "/chat" || params.get("chat") || params.get("code") || params.get("chat_join")) {
       setIsChatOpen(true);
     }
-    if (params.get("help") || params.get("ticket") || params.get("support")) {
+    if (curPath === "/help" || params.get("help") || params.get("ticket") || params.get("support")) {
       setIsHelpOpen(true);
     }
     const podParam = params.get("pod") || params.get("studypod") || params.get("room");
@@ -359,14 +363,26 @@ export default function App() {
       setIsStudyPodOpen(true);
     }
 
-    // 🔗 Clean SEO Branch Route (/branch/CSE) & Search Query (?q=...) Support
-    const branchPathMatch = window.location.pathname.match(/^\/branch\/([^/]+)\/?$/i);
+    // 🔗 Clean SEO Multi-Page Routes (/notes, /branch/CSE, /notices, /chat, /help) & Filter Query Sync (?q=&year=&course=&sort=)
+    const branchPathMatch = curPath.match(/^\/branch\/([^/]+)$/i);
     if (branchPathMatch && branchPathMatch[1]) {
       setSelectedBranch(decodeURIComponent(branchPathMatch[1]).trim().toUpperCase());
     }
     const urlSearchQuery = params.get("q");
     if (urlSearchQuery && urlSearchQuery.trim()) {
       setSearchTerm(urlSearchQuery.trim());
+    }
+    const urlYear = params.get("year");
+    if (urlYear && urlYear.trim()) {
+      setSelectedYear(urlYear.trim());
+    }
+    const urlCourse = params.get("course");
+    if (urlCourse && urlCourse.trim()) {
+      setSelectedCourse(urlCourse.trim());
+    }
+    const urlSort = params.get("sort");
+    if (urlSort && ["recent", "popular", "size", "title"].includes(urlSort)) {
+      setSortBy(urlSort);
     }
 
     // Smart Page QR Code / Direct Note Link Handler (Respects Strict Login Gate + Auto-Opens After Sign-In)
@@ -439,6 +455,133 @@ export default function App() {
       window.removeEventListener("open_auth_modal", handleOpenAuthModal);
     };
   }, []);
+
+  // 🔗 Hybrid SPA Multi-Page URL Sync + Browser Back/Forward (popstate) + Dynamic SEO Title/Canonical
+  const urlSyncReadyRef = useRef(false);
+  const isPopstateSyncRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handlePopState = () => {
+      isPopstateSyncRef.current = true;
+      try {
+        const curPath = window.location.pathname.replace(/\/+$/, "") || "/notes";
+        const sp = new URLSearchParams(window.location.search);
+
+        setIsNoticeBoardOpen(curPath === "/notices");
+        setIsChatOpen(curPath === "/chat" || Boolean(sp.get("chat") || sp.get("code")));
+        setIsHelpOpen(curPath === "/help" || Boolean(sp.get("help") || sp.get("ticket")));
+
+        const noteMatch = curPath.match(/^\/note\/([^/]+)$/i);
+        if (!noteMatch) {
+          setPreviewNote(null);
+        }
+
+        const brMatch = curPath.match(/^\/branch\/([^/]+)$/i);
+        if (brMatch && brMatch[1]) {
+          setSelectedBranch(decodeURIComponent(brMatch[1]).trim().toUpperCase());
+        } else if (curPath === "/notes" || curPath === "/vault") {
+          setSelectedBranch("All");
+        }
+
+        setSearchTerm((sp.get("q") || "").trim());
+        setSelectedYear((sp.get("year") || "All Years").trim() || "All Years");
+        setSelectedCourse((sp.get("course") || "All Courses").trim() || "All Courses");
+        const s = sp.get("sort");
+        setSortBy(s && ["recent", "popular", "size", "title"].includes(s) ? s : "recent");
+      } finally {
+        setTimeout(() => {
+          isPopstateSyncRef.current = false;
+        }, 0);
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!urlSyncReadyRef.current) {
+      urlSyncReadyRef.current = true;
+      return;
+    }
+    if (isPopstateSyncRef.current) return;
+
+    const currentPath = window.location.pathname.replace(/\/+$/, "") || "/";
+    // Preserve deep-linked /note/:id while waiting for guest sign-in before opening the note
+    if (!previewNote && currentPath.startsWith("/note/") && isAuthOpen) {
+      return;
+    }
+
+    let nextPath = "/notes";
+    let nextTitle = "Notes Vault — Free Study Material";
+    const nextParams = new URLSearchParams();
+
+    if (previewNote && previewNote.id) {
+      nextPath = `/note/${encodeURIComponent(previewNote.id)}`;
+      nextTitle = `${previewNote.title || "Study Note"} — Free Study Material`;
+    } else if (isNoticeBoardOpen) {
+      nextPath = "/notices";
+      nextTitle = "University Notices — Free Study Material";
+    } else if (isChatOpen) {
+      nextPath = "/chat";
+      nextTitle = "Student Study Chat — Free Study Material";
+    } else if (isHelpOpen) {
+      nextPath = "/help";
+      nextTitle = "Help Center — Free Study Material";
+    } else {
+      if (selectedBranch && selectedBranch !== "All") {
+        nextPath = `/branch/${encodeURIComponent(selectedBranch)}`;
+        nextTitle = `${selectedBranch} Study Notes & PYQs — Free Study Material`;
+      }
+      if (deferredSearchTerm && deferredSearchTerm.trim()) {
+        nextParams.set("q", deferredSearchTerm.trim());
+      }
+      if (selectedYear && selectedYear !== "All Years") {
+        nextParams.set("year", selectedYear);
+      }
+      if (selectedCourse && selectedCourse !== "All Courses") {
+        nextParams.set("course", selectedCourse);
+      }
+      if (sortBy && sortBy !== "recent") {
+        nextParams.set("sort", sortBy);
+      }
+    }
+
+    const nextSearch = nextParams.toString() ? `?${nextParams.toString()}` : "";
+    const nextFull = `${nextPath}${nextSearch}`;
+    const curFull = `${currentPath}${window.location.search || ""}`;
+
+    if (nextFull !== curFull) {
+      try {
+        if (nextPath !== currentPath) {
+          window.history.pushState({ path: nextPath }, nextTitle, nextFull);
+        } else {
+          window.history.replaceState({ path: nextPath }, nextTitle, nextFull);
+        }
+      } catch (_) {}
+    }
+
+    try {
+      document.title = nextTitle;
+      const canonicalEl = document.querySelector('link[rel="canonical"]');
+      if (canonicalEl) {
+        canonicalEl.setAttribute("href", `${window.location.origin}${nextPath}`);
+      }
+    } catch (_) {}
+  }, [
+    previewNote,
+    isNoticeBoardOpen,
+    isChatOpen,
+    isHelpOpen,
+    isAuthOpen,
+    selectedBranch,
+    deferredSearchTerm,
+    selectedYear,
+    selectedCourse,
+    sortBy,
+  ]);
 
   // ⚡ 0ms Instant Modal Opening: Background idle prefetching for Profile & Admin modals
   useEffect(() => {

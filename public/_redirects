@@ -1,4 +1,5 @@
-# Cloudflare Pages Single-Page Application (SPA) Routing
-# API requests (/api/*) are dynamically routed by functions/api/[[catchall]].js
-# which provides multi-origin load balancing, automatic failover, and zero 405 errors.
-/*      /index.html                                          200
+# Cloudflare Pages Hybrid Routing (Static Landing '/' + SPA Multi-Page App '/app.html')
+# 1. Existing static files (index.html at '/', app.html, /assets/*, /sw.js, /robots.txt) are served directly by CDN.
+# 2. API requests (/api/*) are handled by functions/api/[[catchall]].js and /sitemap.xml by functions/sitemap.xml.js.
+# 3. All multi-page app routes (/notes, /branch/*, /note/*, /notices, /chat, /help, /vault) serve /app.html (200).
+/*      /app.html                                            200

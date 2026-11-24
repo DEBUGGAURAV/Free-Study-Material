@@ -1,5 +1,7 @@
 User-agent: *
 Allow: /
+Allow: /notes
+Allow: /notices
 Allow: /branch/
 Allow: /note/
 Disallow: /api/admin/

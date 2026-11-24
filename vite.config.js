@@ -1,17 +1,35 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
     {
-      name: 'prevent-dist-reload',
+      name: 'hybrid-mpa-spa-router',
       configureServer(server) {
         server.middlewares.use((req, res, next) => {
-          if (req.url && (req.url.startsWith('/dist') || req.url.startsWith('/dist/'))) {
+          const rawUrl = req.url || '/';
+          const pathname = rawUrl.split('?')[0];
+          if (pathname.startsWith('/dist')) {
             res.writeHead(302, { Location: '/' });
             return res.end();
+          }
+          // Hybrid dev routing: '/' serves static landing (index.html); app routes serve SPA shell (app.html)
+          if (
+            pathname !== '/' &&
+            pathname !== '/index.html' &&
+            pathname !== '/app.html' &&
+            !pathname.startsWith('/api/') &&
+            !pathname.startsWith('/ws') &&
+            !pathname.startsWith('/src/') &&
+            !pathname.startsWith('/@') &&
+            !pathname.startsWith('/node_modules/') &&
+            !pathname.startsWith('/assets/') &&
+            !/\.[a-zA-Z0-9]+$/.test(pathname)
+          ) {
+            req.url = '/app.html';
           }
           next();
         });
@@ -31,6 +49,10 @@ export default defineConfig({
     chunkSizeWarningLimit: 2500,
     reportCompressedSize: false,
     rollupOptions: {
+      input: {
+        landing: path.resolve(__dirname, 'index.html'),
+        app: path.resolve(__dirname, 'app.html'),
+      },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',

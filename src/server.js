@@ -360,6 +360,8 @@ app.get("/robots.txt", (req, res) => {
   const robotsTxt = [
     "User-agent: *",
     "Allow: /",
+    "Allow: /notes",
+    "Allow: /notices",
     "Allow: /branch/",
     "Allow: /note/",
     "Disallow: /api/admin/",
@@ -396,6 +398,8 @@ app.get("/sitemap.xml", async (req, res) => {
 
     const urlEntries = [
       `  <url><loc>${escapeXmlAndHtml(originUrl)}/</loc><lastmod>${nowIso}</lastmod><changefreq>daily</changefreq><priority>1.0</priority></url>`,
+      `  <url><loc>${escapeXmlAndHtml(originUrl)}/notes</loc><lastmod>${nowIso}</lastmod><changefreq>daily</changefreq><priority>0.95</priority></url>`,
+      `  <url><loc>${escapeXmlAndHtml(originUrl)}/notices</loc><lastmod>${nowIso}</lastmod><changefreq>daily</changefreq><priority>0.85</priority></url>`,
     ];
 
     for (const br of branches) {
@@ -437,7 +441,8 @@ app.get("*", async (req, res, next) => {
 
   try {
     const fs = require("fs");
-    const indexPath = path.join(distPath, "index.html");
+    const appHtmlPath = path.join(distPath, "app.html");
+    const indexPath = fs.existsSync(appHtmlPath) ? appHtmlPath : path.join(distPath, "index.html");
     const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
     const host = req.headers["x-forwarded-host"] || req.get("host");
     const originUrl = `${proto}://${host}`;
@@ -501,7 +506,7 @@ app.use(
     maxAge: "1d",
     etag: true,
     setHeaders: (res, filePath) => {
-      if (filePath.endsWith("sw.js") || filePath.endsWith("index.html") || filePath.endsWith("manifest.json")) {
+      if (filePath.endsWith("sw.js") || filePath.endsWith("index.html") || filePath.endsWith("app.html") || filePath.endsWith("manifest.json")) {
         res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       } else if (filePath.includes("tesseract")) {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
@@ -525,7 +530,9 @@ app.get("*", (req, res) => {
   ) {
     return res.status(404).json({ success: false, message: "Resource not found" });
   }
-  const indexPath = path.join(distPath, "index.html");
+  const fs = require("fs");
+  const appHtmlPath = path.join(distPath, "app.html");
+  const indexPath = fs.existsSync(appHtmlPath) ? appHtmlPath : path.join(distPath, "index.html");
   res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   res.sendFile(indexPath, (err) => {
     if (err) {
