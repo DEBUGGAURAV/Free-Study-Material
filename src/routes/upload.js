@@ -254,6 +254,12 @@ router.post(
         } catch (_) {}
         invalidateAllCache({ keepNotesRam: true });
         try {
+          const adminRoutes = require("./admin");
+          if (typeof adminRoutes.purgeEdgeCatalogCache === "function") {
+            adminRoutes.purgeEdgeCatalogCache(["/api/notes", "/api/notices", "/api/notes/branches", "/api/notes/subjects"]);
+          }
+        } catch (_) {}
+        try {
           const { broadcastCatalogEvent } = require("../services/realtimeEventService");
           broadcastCatalogEvent({ event: "note_created", note: noteData });
         } catch (_) {}
