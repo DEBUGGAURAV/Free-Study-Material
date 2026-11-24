@@ -4,13 +4,13 @@
  * Zero-Blank-Screen Offline Guarantee (Supports Vite Dev & Production Bundles)
  */
 
-const CACHE_NAME = 'fsm-cache-v33';
+const CACHE_NAME = 'fsm-cache-v34';
 
 // Pre-cached core assets guaranteed to exist in all environments
 const PRECACHE_CORE = [
   '/',
   '/index.html',
-  '/app.html',
+  '/app/',
   '/manifest.json',
   '/favicon.ico',
 ];
@@ -128,7 +128,7 @@ self.addEventListener('fetch', (event) => {
                 cache.put('/index.html', networkResponse.clone()).catch(() => {});
                 cache.put('/', networkResponse.clone()).catch(() => {});
               } else {
-                cache.put('/app.html', networkResponse.clone()).catch(() => {});
+                cache.put('/app/', networkResponse.clone()).catch(() => {});
               }
             }
           }
@@ -137,8 +137,8 @@ self.addEventListener('fetch', (event) => {
           console.log('[SW] 📴 Offline: Serving cached navigation shell for', request.url);
           const cache = await caches.open(CACHE_NAME);
           const cached = isLandingPath
-            ? ((await cache.match('/')) || (await cache.match('/index.html')) || (await cache.match('/app.html')))
-            : ((await cache.match('/app.html')) || (await cache.match(request)) || (await cache.match('/index.html')));
+            ? ((await cache.match('/')) || (await cache.match('/index.html')) || (await cache.match('/app/')))
+            : ((await cache.match('/app/')) || (await cache.match(request)) || (await cache.match('/index.html')));
           if (cached) return cached;
 
           // Emergency inline fallback if first visit ever is offline

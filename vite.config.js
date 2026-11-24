@@ -16,11 +16,12 @@ export default defineConfig({
             res.writeHead(302, { Location: '/' });
             return res.end();
           }
-          // Hybrid dev routing: '/' serves static landing (index.html); app routes serve SPA shell (app.html)
+          // Hybrid dev routing: '/' serves static landing (index.html); app routes serve SPA shell (app/index.html)
           if (
             pathname !== '/' &&
             pathname !== '/index.html' &&
-            pathname !== '/app.html' &&
+            pathname !== '/app/' &&
+            pathname !== '/app/index.html' &&
             !pathname.startsWith('/api/') &&
             !pathname.startsWith('/ws') &&
             !pathname.startsWith('/src/') &&
@@ -29,7 +30,7 @@ export default defineConfig({
             !pathname.startsWith('/assets/') &&
             !/\.[a-zA-Z0-9]+$/.test(pathname)
           ) {
-            req.url = '/app.html';
+            req.url = '/app/index.html';
           }
           next();
         });
@@ -51,7 +52,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         landing: path.resolve(__dirname, 'index.html'),
-        app: path.resolve(__dirname, 'app.html'),
+        app: path.resolve(__dirname, 'app/index.html'),
       },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',

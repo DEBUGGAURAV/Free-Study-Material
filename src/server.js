@@ -441,7 +441,7 @@ app.get("*", async (req, res, next) => {
 
   try {
     const fs = require("fs");
-    const appHtmlPath = path.join(distPath, "app.html");
+    const appHtmlPath = path.join(distPath, "app", "index.html");
     const indexPath = fs.existsSync(appHtmlPath) ? appHtmlPath : path.join(distPath, "index.html");
     const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
     const host = req.headers["x-forwarded-host"] || req.get("host");
@@ -531,7 +531,7 @@ app.get("*", (req, res) => {
     return res.status(404).json({ success: false, message: "Resource not found" });
   }
   const fs = require("fs");
-  const appHtmlPath = path.join(distPath, "app.html");
+  const appHtmlPath = path.join(distPath, "app", "index.html");
   const indexPath = fs.existsSync(appHtmlPath) ? appHtmlPath : path.join(distPath, "index.html");
   res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   res.sendFile(indexPath, (err) => {

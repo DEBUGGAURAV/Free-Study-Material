@@ -1,5 +1,5 @@
-# Cloudflare Pages Hybrid Routing (Static Landing '/' + SPA Multi-Page App '/app.html')
-# 1. Existing static files (index.html at '/', app.html, /assets/*, /sw.js, /robots.txt) are served directly by CDN.
-# 2. API requests (/api/*) are handled by functions/api/[[catchall]].js and /sitemap.xml by functions/sitemap.xml.js.
-# 3. All multi-page app routes (/notes, /branch/*, /note/*, /notices, /chat, /help, /vault) serve /app.html (200).
-/*      /app.html                                            200
+# Hybrid routing is handled cleanly by Cloudflare Pages Functions:
+# - '/' & static assets (/robots.txt, /sw.js, /assets/*) -> served directly by CDN
+# - '/api/*' -> functions/api/[[catchall]].js
+# - '/sitemap.xml' -> functions/sitemap.xml.js
+# - '/notes', '/branch/*', '/note/*', '/notices', '/chat', '/help' -> functions/[[path]].js (200 OK from /app/)
