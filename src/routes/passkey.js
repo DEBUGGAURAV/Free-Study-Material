@@ -667,13 +667,13 @@ router.post("/login-verify", authLimiter, async (req, res) => {
       const candidateEmail = stored?.email || passkeyRecord.userEmail;
       if (ramCache && candidateEmail) {
         const cached = ramCache.get(`auth_user_${candidateEmail}`);
-        if (cached) userRecord = cached.userRecord;
+        if (cached) userRecord = decryptUserObject(cached.userRecord);
       }
       if (!userRecord && candidateEmail) {
         try {
           const { getCachedUserByEmailFromTurso } = require("../services/tursoUserCacheService");
           const tursoUser = await getCachedUserByEmailFromTurso(candidateEmail);
-          if (tursoUser) userRecord = tursoUser;
+          if (tursoUser) userRecord = decryptUserObject(tursoUser);
         } catch (_) {}
       }
       if (!userRecord && db && userId) {
@@ -799,6 +799,9 @@ router.post("/login-verify", authLimiter, async (req, res) => {
         message: "Student authentication is paused during scheduled server maintenance. Only platform administrators are allowed.",
       });
     }
+
+    // Ensure userRecord fields (like mobile) are always decrypted before JWT & Telegram notice
+    userRecord = decryptUserObject(userRecord);
 
     const sessionId = crypto.randomUUID ? crypto.randomUUID() : `sid_${Date.now()}_${crypto.randomBytes(6).toString("hex")}`;
     const payload = {

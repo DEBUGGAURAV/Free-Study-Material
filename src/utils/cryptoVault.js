@@ -13,7 +13,7 @@
 require("dotenv").config();
 const crypto = require("crypto");
 
-// Master Encryption Key derived from JWT_SECRET, CRYPTO_MASTER_KEY, or ADMIN_PASSWORD (Deterministic across server restarts)
+// Master Encryption Key derived from CRYPTO_MASTER_KEY, JWT_SECRET, or ADMIN_PASSWORD (Deterministic across server restarts)
 const RAW_KEY =
   process.env.CRYPTO_MASTER_KEY ||
   process.env.JWT_SECRET ||
@@ -21,6 +21,25 @@ const RAW_KEY =
   "fsm_enterprise_vault_aes_gcm_master_2026";
 const MASTER_KEY_BUFFER = crypto.createHash("sha256").update(RAW_KEY).digest();
 const HMAC_KEY_BUFFER = crypto.createHash("sha256").update("hmac_salt_" + RAW_KEY).digest();
+
+// Fallback candidate keys for zero-downtime decryption across multi-node Render clusters or key rotation
+const FALLBACK_KEY_BUFFERS = (() => {
+  const candidates = [
+    process.env.CRYPTO_MASTER_KEY,
+    process.env.JWT_SECRET,
+    process.env.ADMIN_PASSWORD,
+    "fsm_enterprise_vault_aes_gcm_master_2026",
+  ].filter(Boolean);
+  const seen = new Set();
+  const bufs = [];
+  for (const k of candidates) {
+    const trimmed = String(k).trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    bufs.push(crypto.createHash("sha256").update(trimmed).digest());
+  }
+  return bufs;
+})();
 
 const ALGO = "aes-256-gcm";
 const PREFIX = "enc_gcm:";
@@ -73,14 +92,19 @@ function decrypt(cipherText) {
 
     const iv = Buffer.from(ivHex, "hex");
     const authTag = Buffer.from(authTagHex, "hex");
-    const decipher = crypto.createDecipheriv(ALGO, MASTER_KEY_BUFFER, iv);
 
-    decipher.setAuthTag(authTag);
+    // Try primary master key first, then fallback cluster/legacy keys seamlessly
+    for (const keyBuf of FALLBACK_KEY_BUFFERS) {
+      try {
+        const decipher = crypto.createDecipheriv(ALGO, keyBuf, iv);
+        decipher.setAuthTag(authTag);
+        let decrypted = decipher.update(encryptedHex, "hex", "utf8");
+        decrypted += decipher.final("utf8");
+        return decrypted;
+      } catch (_) {}
+    }
 
-    let decrypted = decipher.update(encryptedHex, "hex", "utf8");
-    decrypted += decipher.final("utf8");
-
-    return decrypted;
+    return cipherText;
   } catch (err) {
     // If decryption fails (e.g. wrong key or tampering), return original
     return cipherText;

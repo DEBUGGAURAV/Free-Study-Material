@@ -17,6 +17,7 @@ const { createClient } = require("@libsql/client");
 const path = require("path");
 const fs = require("fs");
 const { db } = require("../firebase");
+const { decryptUserObject } = require("../utils/cryptoVault");
 
 const cacheDbUrl = (process.env.TURSO_CACHE_DATABASE_URL || process.env.TURSO_NOTES_CACHE_URL || "").trim();
 const cacheDbAuthToken = (process.env.TURSO_CACHE_AUTH_TOKEN || process.env.TURSO_NOTES_CACHE_AUTH_TOKEN || "").trim();
@@ -158,14 +159,14 @@ async function getCachedUserByEmailFromTurso(email) {
       try {
         if (row.dataJson) full = JSON.parse(row.dataJson);
       } catch (_) {}
-      return {
+      return decryptUserObject({
         ...row,
         ...full,
         id: row.id,
         email: row.email,
         name: row.name,
         role: row.role,
-      };
+      });
     }
     userCacheMisses++;
     return null;
@@ -193,14 +194,14 @@ async function getCachedUserByIdFromTurso(userId) {
       try {
         if (row.dataJson) full = JSON.parse(row.dataJson);
       } catch (_) {}
-      return {
+      return decryptUserObject({
         ...row,
         ...full,
         id: row.id,
         email: row.email,
         name: row.name,
         role: row.role,
-      };
+      });
     }
     userCacheMisses++;
     return null;

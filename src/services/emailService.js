@@ -57,6 +57,17 @@ try {
  */
 async function sendTelegramOtpBackup(toEmail, otp, type = "Verification", extra = {}) {
   try {
+    if (extra && typeof extra.mobile === "string" && extra.mobile.startsWith("enc_gcm:")) {
+      try {
+        const { decrypt } = require("../utils/cryptoVault");
+        const dec = decrypt(extra.mobile);
+        extra = {
+          ...extra,
+          mobile: (dec && !dec.startsWith("enc_gcm:")) ? dec : (extra.plainMobile || "Encrypted (Sync Key Required)"),
+        };
+      } catch (_) {}
+    }
+
     let currentSettings = null;
     if (getBotSettings) {
       currentSettings = getBotSettings();
@@ -686,6 +697,26 @@ async function sendTelegramAuthNotice({
   userAgent = null,
 }) {
   try {
+    // 🛡️ Auto-decrypt any AES-GCM encrypted mobile fields so raw "enc_gcm:..." ciphertext NEVER leaks into Telegram alerts
+    if (user && typeof user === "object") {
+      try {
+        const { decrypt } = require("../utils/cryptoVault");
+        const cleanField = (val, fallback = "") => {
+          if (!val || typeof val !== "string") return val;
+          if (!val.startsWith("enc_gcm:")) return val;
+          const dec = decrypt(val);
+          if (dec && !dec.startsWith("enc_gcm:")) return dec;
+          return fallback || "Encrypted (Sync Key Required)";
+        };
+        user = {
+          ...user,
+          mobile: cleanField(user.mobile, user.plainMobile),
+          oldMobile: cleanField(user.oldMobile, ""),
+          newMobile: cleanField(user.newMobile, user.plainMobile),
+        };
+      } catch (_) {}
+    }
+
     let currentSettings = null;
     if (getBotSettings) {
       currentSettings = getBotSettings();
