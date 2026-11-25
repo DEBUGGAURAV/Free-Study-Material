@@ -7,6 +7,17 @@ export async function onRequest(context) {
   const url = new URL(request.url);
   const pathname = url.pathname;
 
+  // 0. Serve Google Search Console verification file directly (200 OK, avoids Pages Pretty-URL 308 strip on .html)
+  if (pathname === "/googled76ca012d3d130b8.html") {
+    return new Response("google-site-verification: googled76ca012d3d130b8.html", {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "public, max-age=3600",
+      },
+    });
+  }
+
   // 1. Always serve static landing page ('/') and real static assets directly via Pages CDN
   const isStaticFile =
     pathname === "/" ||
