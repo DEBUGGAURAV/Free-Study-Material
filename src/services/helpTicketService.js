@@ -94,20 +94,27 @@ function getHelpAdminChatId() {
 const dynamicHelpTopicIds = { active: null, closed: null };
 const creatingHelpTopicLocks = { active: null, closed: null };
 
-// Supergroup Topic: Active Support Tickets (Topic 6 is strictly reserved for Security Updates only)
+// Help Supergroup (-1004369896029) Topic 6: Active Support Tickets
+// (Note: Security Topic 6 is in the separate TELEGRAM_TOPIC_GROUP_ID supergroup)
+const HELP_NON_SUPPORT_TOPICS = new Set([17, 18]);
+
 function getHelpActiveTopicId() {
-  if (dynamicHelpTopicIds.active) return dynamicHelpTopicIds.active;
+  if (dynamicHelpTopicIds.active && !HELP_NON_SUPPORT_TOPICS.has(dynamicHelpTopicIds.active) && dynamicHelpTopicIds.active !== 7) {
+    return dynamicHelpTopicIds.active;
+  }
   const topic = process.env.HELP_TOPIC_ACTIVE_ID || process.env.HELP_TOPIC_ID || process.env.TELEGRAM_HELP_TOPIC_ID;
-  const parsed = topic ? parseInt(topic, 10) : 18;
-  return !isNaN(parsed) && parsed > 0 && parsed !== 6 ? parsed : 18;
+  const parsed = topic ? parseInt(topic, 10) : 6;
+  return !isNaN(parsed) && parsed > 0 && parsed !== 7 && !HELP_NON_SUPPORT_TOPICS.has(parsed) ? parsed : 6;
 }
 
-// Supergroup Topic 7: Closed & Resolved Tickets Report
+// Help Supergroup Topic 7: Closed & Resolved Tickets Report
 function getHelpClosedTopicId() {
-  if (dynamicHelpTopicIds.closed) return dynamicHelpTopicIds.closed;
+  if (dynamicHelpTopicIds.closed && !HELP_NON_SUPPORT_TOPICS.has(dynamicHelpTopicIds.closed) && dynamicHelpTopicIds.closed !== 6) {
+    return dynamicHelpTopicIds.closed;
+  }
   const topic = process.env.HELP_TOPIC_CLOSED_ID || process.env.HELP_CLOSED_TOPIC_ID;
   const parsed = topic ? parseInt(topic, 10) : 7;
-  return !isNaN(parsed) && parsed > 0 ? parsed : 7;
+  return !isNaN(parsed) && parsed > 0 && parsed !== 6 && !HELP_NON_SUPPORT_TOPICS.has(parsed) ? parsed : 7;
 }
 
 async function createHelpForumTopicIfNeeded(botToken, chatId, role = "active") {
@@ -553,8 +560,8 @@ async function sendTelegramMessageSafe(botToken, payload, topicRole = null) {
       }
     }
 
-    // Resilient fallback 2: If topic thread failed, retry to main supergroup chat
-    if (payload.message_thread_id) {
+    // Resilient fallback 2: Only strip thread ID for non-topic replies (never leak Active/Closed tickets into General chat)
+    if (payload.message_thread_id && !topicRole) {
       const directPayload = { ...payload };
       delete directPayload.message_thread_id;
       res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -1562,7 +1569,7 @@ async function dispatchStudentReplyNotice(ticket, replyText, attachments = []) {
   };
 
   try {
-    // 1. Dual-dispatch to Supergroup Active Support Topic (Topic 18, never Topic 6) so forum admins see student replies!
+    // 1. Dual-dispatch to Help Supergroup Active Support Topic (Topic 6) so forum admins see student replies!
     if (chatId) {
       const activeTopicId = getHelpActiveTopicId();
       const groupPayload = {
@@ -1572,7 +1579,7 @@ async function dispatchStudentReplyNotice(ticket, replyText, attachments = []) {
         reply_markup: inlineKeyboard,
       };
       if (activeTopicId) groupPayload.message_thread_id = activeTopicId;
-      await sendTelegramMessageSafe(botToken, groupPayload);
+      await sendTelegramMessageSafe(botToken, groupPayload, "active");
 
       if (Array.isArray(attachments) && attachments.length > 0) {
         for (const att of attachments.slice(0, 3)) {
@@ -1867,7 +1874,7 @@ function startHelpBotPoller() {
               }).catch(() => {});
             }
 
-            // Post active ticket notice back to Active Support Topic (Topic 18, never Topic 6)
+            // Post active ticket notice back to Help Supergroup Active Support Topic (Topic 6)
             if (res.ticket) {
               await dispatchTelegramHelpNotice(res.ticket);
             }

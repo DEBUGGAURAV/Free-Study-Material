@@ -47,7 +47,7 @@ const DEFAULT_AI_SETTINGS = {
   failoversToday: 0,
   cachedHitsToday: 0,
   aiSearchTopicId: Number(process.env.AI_SEARCH_TOPIC_ID || process.env.TELEGRAM_AI_SEARCH_TOPIC_ID || 17) || 17, // 🤖 Telegram sub-topic for student AI queries (Default: Topic 17)
-  purgeAuditTopicId: null, // 🔥 Telegram sub-topic for Firebase/Turso purge logs
+  purgeAuditTopicId: Number(process.env.PURGE_AUDIT_TOPIC_ID || process.env.TELEGRAM_PURGE_AUDIT_TOPIC_ID || 18) || 18, // 🔥 Telegram sub-topic for Firebase/Turso purge logs (Default: Topic 18)
   lastResetDate: new Date().toISOString().slice(0, 10),
   groqApiKey: "",
   geminiApiKey: "",
@@ -78,10 +78,10 @@ function isAiGloballyEnabled() {
 
 /**
  * Resolves the dedicated Telegram Topic ID for AI Search Logs (strictly Topic 17).
- * Strictly prevents AI searches and Circle to Search from leaking into Help Active (6), Help Closed (7), or legacy topics.
+ * Strictly prevents AI searches and Circle to Search from leaking into Help Active (6), Help Closed (7), Purge (18), or legacy topics.
  */
 function getAiSearchTopicId() {
-  const blockedTopics = new Set([6, 7, 14, 59, 60, 70]);
+  const blockedTopics = new Set([6, 7, 14, 18, 59, 60, 70]);
   const envTopic = parseInt(process.env.AI_SEARCH_TOPIC_ID || process.env.TELEGRAM_AI_SEARCH_TOPIC_ID || "", 10);
   if (!isNaN(envTopic) && envTopic > 0 && !blockedTopics.has(envTopic)) {
     return envTopic;
@@ -91,6 +91,23 @@ function getAiSearchTopicId() {
     return savedTopic;
   }
   return 17; // Strictly fixed to Topic 17 without requiring env change
+}
+
+/**
+ * Resolves the dedicated Telegram Topic ID for Firebase & Turso Account Purge Logs (strictly Topic 18).
+ * Strictly prevents Purge logs from leaking into Help Active (6), Help Closed (7), or AI Search (17).
+ */
+function getPurgeAuditTopicId() {
+  const blockedTopics = new Set([6, 7, 14, 17, 59, 60, 70]);
+  const envTopic = parseInt(process.env.PURGE_AUDIT_TOPIC_ID || process.env.TELEGRAM_PURGE_AUDIT_TOPIC_ID || "", 10);
+  if (!isNaN(envTopic) && envTopic > 0 && !blockedTopics.has(envTopic)) {
+    return envTopic;
+  }
+  const savedTopic = Number(currentAiSettings.purgeAuditTopicId || 0);
+  if (savedTopic > 0 && !blockedTopics.has(savedTopic)) {
+    return savedTopic;
+  }
+  return 18; // Strictly fixed to Topic 18 without requiring env change
 }
 
 // 1-minute rolling rate limiter window
@@ -166,12 +183,9 @@ async function loadAiSettings() {
         if (!currentAiSettings.groqModel || currentAiSettings.groqModel.includes("llama-3.1") || currentAiSettings.groqModel.includes("llama-3.3")) {
           currentAiSettings.groqModel = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
         }
-        // Strictly enforce AI Search Topic ID to Topic 17 (never topic 6 or 7)
-        if (!currentAiSettings.aiSearchTopicId || currentAiSettings.aiSearchTopicId === 6 || currentAiSettings.aiSearchTopicId === 7 || currentAiSettings.aiSearchTopicId === 14) {
-          currentAiSettings.aiSearchTopicId = 17;
-        } else {
-          currentAiSettings.aiSearchTopicId = getAiSearchTopicId();
-        }
+        // Strictly enforce AI Search Topic ID to Topic 17 and Purge Audit Topic ID to Topic 18 (never Topic 6 or 7)
+        currentAiSettings.aiSearchTopicId = getAiSearchTopicId();
+        currentAiSettings.purgeAuditTopicId = getPurgeAuditTopicId();
         saveAiSettingsToDb().catch(() => {});
       } else {
         currentAiSettings.groqApiKey = process.env.GROQ_API_KEY || "";
@@ -751,7 +765,7 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
   const isImageOrDiagram = Boolean(options.imageBase64);
   const imageBase64 = options.imageBase64 || null;
   const imageMimeType = options.imageMimeType || "image/jpeg";
-  const maxProviderAttempts = isImageOrDiagram ? 2 : 3;
+  const maxProviderAttempts = isImageOrDiagram ? 4 : 5;
   let providerAttempts = 0;
   const canTryMoreProviders = () => !finalAnswer && providerAttempts < maxProviderAttempts;
 
@@ -887,11 +901,11 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
 
   // Tier 3 (Text): Cloudflare Workers AI (Native Edge GPU - @cf/meta/llama-3.1-8b-instruct)
   if (!finalAnswer && !isImageOrDiagram && canTryMoreProviders()) {
-    providerAttempts += 1;
     const canUseCfAi = currentAiSettings.cloudflareAiEnabled !== false &&
                        (currentAiSettings.cloudflareAiUsedToday || 0) < (currentAiSettings.cloudflareAiLimit || 1000) &&
                        isCloudflareAiAvailable();
     if (canUseCfAi) {
+      providerAttempts += 1;
       try {
         finalAnswer = await queryCloudflareWorkersAi(cleanQuery, context, options);
         currentAiSettings.cloudflareAiUsedToday = (currentAiSettings.cloudflareAiUsedToday || 0) + 1;
@@ -1064,7 +1078,7 @@ function getAiTelemetry() {
       groqStorageSource: process.env.GROQ_API_KEY ? "ENV" : (currentAiSettings.groqApiKey ? "DATABASE" : "NONE"),
       geminiStorageSource: process.env.GEMINI_API_KEY ? "ENV" : (currentAiSettings.geminiApiKey ? "DATABASE" : "NONE"),
       aiSearchTopicId: getAiSearchTopicId(),
-      purgeAuditTopicId: currentAiSettings.purgeAuditTopicId || null,
+      purgeAuditTopicId: getPurgeAuditTopicId(),
       cfAiWorkerUrl: process.env.CF_AI_WORKER_URL || (process.env.CF_CHAT_WORKER_URL ? process.env.CF_CHAT_WORKER_URL.replace("fsm-chat-edge", "fsm-ai-edge") : "https://fsm-ai-edge.jnplotus.workers.dev"),
     },
     usage: {
@@ -1598,7 +1612,7 @@ async function dispatchAiSearchTelegramAudit({
     if (/thread not found|topic.*deleted|topic.*closed|message_thread_id/i.test(errDesc)) {
       console.warn(`[TELEGRAM-AI-AUDIT] Topic #${topicId} unavailable (${errDesc}). Auto-creating fresh AI topic...`);
       const freshTopicId = await createAiSearchForumTopic(token, chatId);
-      const targetRetryId = (freshTopicId && freshTopicId !== 6 && freshTopicId !== 7 && freshTopicId !== 14) ? freshTopicId : 17;
+      const targetRetryId = (freshTopicId && freshTopicId !== 6 && freshTopicId !== 7 && freshTopicId !== 14 && freshTopicId !== 18) ? freshTopicId : 17;
       const retryData = await sendTxtDoc(targetRetryId);
       return Boolean(retryData && retryData.ok);
     }
@@ -1626,8 +1640,8 @@ async function dispatchUserPurgeTelegramAudit({
 }) {
   const token = getHelpBotToken();
   const chatId = getHelpChatId();
-  const topicId = Number(currentAiSettings.purgeAuditTopicId);
-  if (!token || !chatId || !topicId || topicId === 6 || topicId === 7 || topicId === 14) return false;
+  const topicId = getPurgeAuditTopicId();
+  if (!token || !chatId || !topicId || topicId === 6 || topicId === 7 || topicId === 14 || topicId === 17) return false;
 
   try {
     const timeStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
@@ -1794,6 +1808,8 @@ module.exports = {
   resetDailyCounters,
   testAiProvider,
   incrementCircleSearchUsage,
+  getAiSearchTopicId,
+  getPurgeAuditTopicId,
   setupTelegramAiSupportTopics,
   dispatchAiSearchTelegramAudit,
   dispatchUserPurgeTelegramAudit,

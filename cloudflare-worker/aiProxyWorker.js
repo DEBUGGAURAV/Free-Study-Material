@@ -501,24 +501,27 @@ async function queryGitHubModelsEdge(env, query, context, imageBase64 = null, im
 }
 
 /**
- * 🤖 Real-Time Telegram Dispatch to "AI Search Logs" Forum Sub-Topic from Edge Worker
+ * 🤖 Real-Time Telegram Dispatch to "AI Search Logs" Forum Sub-Topic (Strictly Topic 17)
+ * Sends ONE single formatted .txt audit document containing BOTH Student Question + Complete Untruncated AI Solution.
  */
-async function dispatchTelegramAiNotification(env, query, provider, model, cached, latencyMs, isCircle, user = null) {
+async function dispatchTelegramAiNotification(env, query, provider, model, cached, latencyMs, isCircle, user = null, answer = "") {
   const token = (env.HELP_BOT_TOKEN || env.TELEGRAM_HELP_BOT_TOKEN || "").trim();
   const chatId = (env.HELP_CHAT_ID || env.TELEGRAM_HELP_CHAT_ID || "").trim();
-  // 🎯 Strictly fix AI Search & Circle to Search to Topic 17 (never leak into HelpDesk Topic 6/7)
+  // 🎯 Strictly fix AI Search & Circle to Search to Topic 17 (never leak into HelpDesk Topic 6/7 or Purge Topic 18)
+  const blockedTopics = new Set([6, 7, 14, 18, 59, 60, 70]);
   let topicId = 17;
   const envTopic = Number((env.AI_SEARCH_TOPIC_ID || env.TELEGRAM_AI_SEARCH_TOPIC_ID || "").trim());
-  if (!isNaN(envTopic) && envTopic > 0 && envTopic !== 6 && envTopic !== 7 && envTopic !== 14) {
+  if (!isNaN(envTopic) && envTopic > 0 && !blockedTopics.has(envTopic)) {
     topicId = envTopic;
   }
   if (!token || !chatId) return;
 
   try {
     const timeStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-    const headline = isCircle ? "⭕ <b>Circle to Search & Solve</b>" : "🤖 <b>AI Academic Query</b>";
+    const headline = isCircle ? "⭕ <b>Circle to Search & Solve</b>" : "🤖 <b>AI Academic Query & Solution</b>";
+    const filePrefix = isCircle ? "CIRCLE_TO_SEARCH" : "AI_QUERY";
 
-    let engineName = String(provider).toUpperCase();
+    let engineName = String(provider || "Cloud AI").toUpperCase();
     let engineTier = "Cloud AI";
     const p = String(provider || "").toLowerCase();
     if (cached || p.includes("turso") || p.includes("cache")) {
@@ -541,43 +544,87 @@ async function dispatchTelegramAiNotification(env, query, provider, model, cache
       engineTier = "📄 Tier 9 (Offline Extractive Fallback)";
     }
 
-    const studentName = escapeHtml(String(user?.name || user?.userName || "Student Scholar").slice(0, 120));
-    const studentEmail = escapeHtml(String(user?.email || "anonymous@student.edu").slice(0, 160));
-    const studentMobile = escapeHtml(String(user?.mobile || user?.phone || "N/A").slice(0, 40));
+    const rawName = String(user?.name || user?.userName || "Student Scholar").slice(0, 120);
+    const rawEmail = String(user?.email || "anonymous@student.edu").slice(0, 160);
+    const rawMobile = String(user?.mobile || user?.phone || "N/A").slice(0, 40);
+    const rawQuery = String(query || "").trim();
+    const rawAnswer = typeof answer === "string"
+      ? answer.trim()
+      : (answer ? JSON.stringify(answer, null, 2) : "");
+
+    const studentName = escapeHtml(rawName);
+    const studentEmail = escapeHtml(rawEmail);
+    const studentMobile = escapeHtml(rawMobile);
     const safeEngineName = escapeHtml(engineName);
     const safeModel = escapeHtml(model || "Academic Model");
-    const safeQuery = escapeHtml(String(query || "").slice(0, 300));
+    const safeQuery = escapeHtml(rawQuery.slice(0, 140));
 
-    const text = [
+    const fullTxtContent = [
+      "================================================================================",
+      `       ${isCircle ? "CIRCLE TO SEARCH & SOLVE" : "AI ACADEMIC QUERY & SOLUTION"} - FULL AUDIT DOSSIER`,
+      "================================================================================",
+      `Timestamp           : ${timeStr} IST`,
+      `Service Type        : ${isCircle ? "Circle to Search (Visual / Text)" : "AI Academic Q&A (Edge Worker)"}`,
+      `Topic Channel       : Topic #${topicId} (AI Queries Hub)`,
+      "--------------------------------------------------------------------------------",
+      "STUDENT PROFILE:",
+      `  • Full Name       : ${rawName}`,
+      `  • Email Address   : ${rawEmail}`,
+      `  • Mobile Number   : ${rawMobile}`,
+      "--------------------------------------------------------------------------------",
+      "AI INFERENCE ENGINE TELEMETRY:",
+      `  • Engine Provider : ${engineName}`,
+      `  • Model Name      : ${model || "Academic Model"}`,
+      `  • Provider Tier   : ${engineTier}`,
+      `  • Response Latency: ${latencyMs || 0}ms`,
+      `  • Cache Status    : ${cached ? "Cache Hit (0ms / 0 Tokens)" : "Fresh Live Inference"}`,
+      "================================================================================",
+      "STUDENT QUESTION / CIRCLED QUERY:",
+      "--------------------------------------------------------------------------------",
+      rawQuery || "(Empty query)",
+      "",
+      "================================================================================",
+      "AI GENERATED SOLUTION / RESPONSE (UNTRUNCATED FULL TEXT):",
+      "--------------------------------------------------------------------------------",
+      rawAnswer || "(No text response generated)",
+      "",
+      "================================================================================",
+      "END OF AUDIT DOSSIER - FREE STUDY MATERIAL AI GUARDIAN",
+      "================================================================================",
+    ].join("\n");
+
+    const emailSafe = rawEmail.toLowerCase().replace(/[^a-z0-9]/g, "_") || "student";
+    const txtFilename = `${filePrefix}_${emailSafe}_${Date.now()}.txt`;
+
+    const caption = [
       headline,
-      "━━━━━━━━━━━━━━━━━━━━",
-      `🧠 <b>AI Used:</b> <b>${safeEngineName}</b>`,
-      `📦 <b>Model:</b> <code>${safeModel}</code>`,
-      `🏷️ <b>Engine Tier:</b> ${engineTier}`,
-      `⏱️ <b>Response Time:</b> ${latencyMs}ms`,
-      `💾 <b>Cache Status:</b> ${cached ? "🎯 Cache Hit (0ms / 0 Tokens)" : "⚡ Fresh Inference"}`,
       "━━━━━━━━━━━━━━━━━━━━",
       `👤 <b>Student:</b> ${studentName}`,
       `📧 <b>Email:</b> <code>${studentEmail}</code>`,
       `📱 <b>Mobile:</b> <code>${studentMobile}</code>`,
-      `❓ <b>Query / Formula:</b>\n<blockquote>${safeQuery}</blockquote>`,
+      `🧠 <b>AI:</b> <b>${safeEngineName}</b> (<code>${safeModel}</code>)`,
+      `⏱️ <b>Latency:</b> ${latencyMs || 0}ms • ${cached ? "🎯 0ms Cache" : "⚡ Fresh Inference"}`,
       "━━━━━━━━━━━━━━━━━━━━",
-      `🕒 <b>Timestamp:</b> ${timeStr}`,
-      `📍 <i>Delivered to Dedicated AI Queries Hub (Topic #${topicId})</i>`,
+      `❓ <b>Query:</b> <i>${safeQuery}${rawQuery.length > 140 ? "..." : ""}</i>`,
+      "━━━━━━━━━━━━━━━━━━━━",
+      `📎 <b>Attached Document:</b> <code>${txtFilename}</code>`,
+      `<i>Full AI response & solution delivered in .txt file format (Topic #${topicId}).</i>`,
     ].join("\n");
 
-    const payload = {
-      chat_id: chatId,
-      text,
-      parse_mode: "HTML",
-      disable_web_page_preview: true,
-      message_thread_id: Number(topicId),
-    };
+    const form = new FormData();
+    form.append("chat_id", chatId);
+    form.append("message_thread_id", String(topicId));
+    form.append(
+      "document",
+      new Blob([fullTxtContent], { type: "text/plain;charset=utf-8" }),
+      txtFilename
+    );
+    form.append("caption", caption.slice(0, 1024));
+    form.append("parse_mode", "HTML");
 
-    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: form,
     });
   } catch (_) {}
 }
@@ -829,7 +876,8 @@ export default {
               true,
               Date.now() - startTime,
               url.pathname.includes("circle"),
-              user
+              user,
+              cached.answer
             )
           );
 
@@ -935,7 +983,8 @@ export default {
             false,
             Date.now() - startTime,
             url.pathname.includes("circle"),
-            user
+            user,
+            answer
           )
         );
 
