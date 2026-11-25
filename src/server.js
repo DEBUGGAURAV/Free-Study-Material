@@ -378,6 +378,17 @@ app.get("/robots.txt", (req, res) => {
   return res.status(200).send(robotsTxt);
 });
 
+// 🛡️ SEO Canonical Domain Protection: Prevent Google from indexing raw Render backend hostnames as duplicates
+app.use((req, res, next) => {
+  const host = String(req.get("host") || "").toLowerCase();
+  const fwdHost = String(req.headers["x-forwarded-host"] || "").toLowerCase();
+  const isDirectRender = host.endsWith(".onrender.com") && (!fwdHost || fwdHost.endsWith(".onrender.com"));
+  if (isDirectRender && req.path !== "/sitemap.xml" && req.path !== "/robots.txt") {
+    res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  }
+  next();
+});
+
 // 🗺️ Google SEO: Dynamic 0-Firestore-Read XML Sitemap (served directly from RAM/Turso cache + 1h Edge Cache)
 app.get("/sitemap.xml", async (req, res) => {
   try {
@@ -395,6 +406,14 @@ app.get("/sitemap.xml", async (req, res) => {
       new Set(visibleNotes.map((n) => String(n.branch || "").trim().toUpperCase()).filter(Boolean))
     );
     const nowIso = new Date().toISOString().split("T")[0];
+    const formatSitemapDate = (rawVal) => {
+      if (!rawVal) return nowIso;
+      const d = typeof rawVal === "number"
+        ? new Date(rawVal > 1e12 ? rawVal : rawVal * 1000)
+        : new Date(rawVal);
+      if (Number.isNaN(d.getTime())) return nowIso;
+      return d.toISOString().split("T")[0];
+    };
 
     const urlEntries = [
       `  <url><loc>${escapeXmlAndHtml(originUrl)}/</loc><lastmod>${nowIso}</lastmod><changefreq>daily</changefreq><priority>1.0</priority></url>`,
@@ -409,7 +428,7 @@ app.get("/sitemap.xml", async (req, res) => {
     }
 
     for (const n of visibleNotes.slice(0, 1000)) {
-      const modDate = (n.updatedAt || n.createdAt || nowIso).toString().slice(0, 10);
+      const modDate = formatSitemapDate(n.updatedAt || n.createdAt);
       urlEntries.push(
         `  <url><loc>${escapeXmlAndHtml(originUrl)}/note/${encodeURIComponent(n.id)}</loc><lastmod>${escapeXmlAndHtml(modDate)}</lastmod><changefreq>weekly</changefreq><priority>0.75</priority></url>`
       );

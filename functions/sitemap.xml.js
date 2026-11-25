@@ -11,49 +11,76 @@ const BACKEND_ORIGINS = [
 
 export async function onRequest(context) {
   const { request } = context;
+  const method = (request.method || "GET").toUpperCase();
+  if (method !== "GET" && method !== "HEAD") {
+    return new Response("Method Not Allowed", { status: 405 });
+  }
+
   const url = new URL(request.url);
   const edgeCache = typeof caches !== "undefined" ? caches.default : null;
   const cacheKey = new Request(`${url.origin}/sitemap.xml`, { method: "GET" });
 
+  const buildXmlResponse = (xml, cacheControl) => {
+    const headers = {
+      "Content-Type": "application/xml; charset=utf-8",
+      "Cache-Control": cacheControl,
+      "X-Content-Type-Options": "nosniff",
+    };
+    return new Response(method === "HEAD" ? null : xml, { status: 200, headers });
+  };
+
   if (edgeCache) {
     try {
       const hit = await edgeCache.match(cacheKey);
-      if (hit) return hit;
+      if (hit) {
+        return method === "HEAD"
+          ? new Response(null, { status: 200, headers: hit.headers })
+          : hit;
+      }
     } catch (_) {}
   }
 
-  for (const origin of BACKEND_ORIGINS) {
+  // Race all healthy backend nodes in parallel with a tight 4.5s timeout so Googlebot never times out!
+  const fetchOriginSitemap = async (origin) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4500);
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 8000);
       const res = await fetch(`${origin}/sitemap.xml`, {
         method: "GET",
         headers: {
           "X-Forwarded-Host": url.host,
           "X-Forwarded-Proto": "https",
+          "Accept": "application/xml, text/xml, */*",
         },
         signal: controller.signal,
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const xml = (await res.text()).trim();
+      if (!xml.includes("<urlset")) throw new Error("Invalid sitemap XML");
+      return xml;
+    } finally {
       clearTimeout(timer);
-      if (res.ok) {
-        const xml = await res.text();
-        if (xml.includes("<urlset")) {
-          const out = new Response(xml, {
-            status: 200,
-            headers: {
-              "Content-Type": "application/xml; charset=utf-8",
-              "Cache-Control": "public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400",
-            },
-          });
-          if (edgeCache) {
-            const p = edgeCache.put(cacheKey, out.clone()).catch(() => {});
-            if (typeof context.waitUntil === "function") context.waitUntil(p);
-          }
-          return out;
-        }
-      }
-    } catch (_) {}
-  }
+    }
+  };
+
+  try {
+    const xml = await Promise.any(BACKEND_ORIGINS.map((origin) => fetchOriginSitemap(origin)));
+    const cacheableRes = new Response(xml, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/xml; charset=utf-8",
+        "Cache-Control": "public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+    if (edgeCache) {
+      const p = edgeCache.put(cacheKey, cacheableRes.clone()).catch(() => {});
+      if (typeof context.waitUntil === "function") context.waitUntil(p);
+    }
+    return method === "HEAD"
+      ? new Response(null, { status: 200, headers: cacheableRes.headers })
+      : cacheableRes;
+  } catch (_) {}
 
   // Fallback minimal sitemap if all Render nodes are waking up
   const today = new Date().toISOString().split("T")[0];
@@ -70,11 +97,5 @@ export async function onRequest(context) {
     "</urlset>",
   ].join("\n");
 
-  return new Response(fallbackXml, {
-    status: 200,
-    headers: {
-      "Content-Type": "application/xml; charset=utf-8",
-      "Cache-Control": "public, max-age=300, s-maxage=300",
-    },
-  });
+  return buildXmlResponse(fallbackXml, "public, max-age=300, s-maxage=300");
 }
