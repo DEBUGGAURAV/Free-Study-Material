@@ -25,7 +25,6 @@ export const SITE_DESCRIPTION =
 export const DEFAULT_CLUSTER_URLS = [
   "https://freestudymaterial1.onrender.com",
   "https://freestudymaterial2.onrender.com",
-  "https://freestudymaterial.onrender.com",
 ];
 
 export const BACKEND_CLUSTER_URLS = (() => {

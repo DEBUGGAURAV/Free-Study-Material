@@ -1936,20 +1936,19 @@ export default function VirtualPdfReader({
             return;
           }
 
-          // ⚡ Intelligent Auto-Retry for transient Cloud Vault stream warm-ups (503/network/warming up)
+          // ⚡ Intelligent Auto-Retry for transient Cloud Vault stream warm-ups (502/503/504/CLUSTER_WAKING_UP/network/timeout)
+          const errStatus = Number(err?.status || 0);
           const isTransientStreamGlitch =
-            errMsg.includes("503") ||
-            errMsg.includes("warming up") ||
-            errMsg.includes("reconnecting") ||
-            errMsg.includes("Streaming error") ||
-            errMsg.includes("Failed to fetch") ||
-            errMsg.includes("network");
+            errStatus === 502 ||
+            errStatus === 503 ||
+            errStatus === 504 ||
+            /502|503|504|CLUSTER_WAKING_UP|spinning up|warming up|reconnecting|Streaming error|unavailable|Failed to fetch|network|timeout|aborted/i.test(errMsg);
 
           if (isTransientStreamGlitch && !isDeletedNote && streamRetryCountRef.current < 3) {
             streamRetryCountRef.current += 1;
-            const retryDelay = streamRetryCountRef.current === 1 ? 2500 : 3500;
+            const retryDelay = streamRetryCountRef.current === 1 ? 2000 : streamRetryCountRef.current === 2 ? 3000 : 4000;
             console.log(`[PDF.js] Academic vault warming up... Auto-reconnecting (Attempt ${streamRetryCountRef.current}/3 in ${retryDelay}ms)...`);
-            setOcrStatusText(`⚡ Academic vault warming up... Auto-reconnecting (Attempt ${streamRetryCountRef.current}/3)...`);
+            setOcrStatusText(`⚡ Reconnecting to Cloud Vault (Attempt ${streamRetryCountRef.current}/3)...`);
             setTimeout(() => {
               if (!isCancelled && loadGenerationRef.current === currentGeneration) {
                 setReloadTrigger((v) => v + 1);
@@ -1958,8 +1957,13 @@ export default function VirtualPdfReader({
             return;
           }
 
-          // Native Web Reader fallback
-          if (!isDeletedNote && (nativeSrc || noteId || note?.fileUrl || note?.driveLink)) {
+          // Native Web Reader fallback: ONLY switch when we have a valid local PDF blob OR external Drive/file URL (NEVER load a failing 503 JSON endpoint into an iframe!)
+          const canSafelyUseIframe = Boolean(
+            (localPdfBuffer && localPdfBuffer.byteLength > 200) ||
+            note?.driveLink ||
+            (!isTransientStreamGlitch && !isMobileDevice && (nativeSrc || note?.fileUrl))
+          );
+          if (!isDeletedNote && canSafelyUseIframe) {
             setUseNativeViewer(true);
             setLoading(false);
             setNativeLoading(false);
@@ -1968,27 +1972,37 @@ export default function VirtualPdfReader({
             return;
           }
 
-          setError(errMsg);
+          setError(
+            isTransientStreamGlitch
+              ? "Cloud storage node is momentarily busy loading this large note. Please tap Retry — it will resume instantly."
+              : errMsg
+          );
           setLoading(false);
           setNativeLoading(false);
         }
       }
     }
 
-    // 🛡️ Ultimate safety watchdog: Guarantee reader is NEVER stuck at 100%
+    // 🛡️ Ultimate safety watchdog: Adaptive timeout (120s for 25MB+ exam notes on mobile, 45s for standard notes)
+    const expectedNoteSize = Number(note?.compressedSize || note?.fileSize || 0);
+    const watchdogMs = expectedNoteSize > 25 * 1024 * 1024 ? 120000 : 45000;
     const safetyWatchdog = setTimeout(() => {
       if (!isCancelled && loadGenerationRef.current === currentGeneration) {
         setLoading((prevLoading) => {
           if (prevLoading) {
             console.warn("[VirtualPdfReader] Safety watchdog tripped: auto-clearing stuck loader state");
             setNativeLoading(false);
-            setUseNativeViewer(true);
+            if (!isMobileDevice || Boolean(note?.driveLink)) {
+              setUseNativeViewer(true);
+            } else {
+              setError("This large PDF is taking longer on your current network. Tap Retry to resume from cache.");
+            }
             return false;
           }
           return prevLoading;
         });
       }
-    }, 45000);
+    }, watchdogMs);
 
     loadPdf();
 

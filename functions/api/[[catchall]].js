@@ -7,7 +7,6 @@
 const BACKEND_ORIGINS = [
   "https://freestudymaterial1.onrender.com",  // Active Healthy Node #1
   "https://freestudymaterial2.onrender.com",  // Active Healthy Node #2
-  "https://freestudymaterial.onrender.com",   // Node #3
 ];
 
 // Circuit Breaker: Cache unhealthy origins for 60s to avoid 2-5s retry lag on dead backends
@@ -151,7 +150,7 @@ export async function onRequest(context) {
           }
           try {
             const ac = new AbortController();
-            const tId = setTimeout(() => ac.abort(), 3000);
+            const tId = setTimeout(() => ac.abort(), 6000);
             const accessRes = await fetch(accessUrl.toString(), {
               method: "GET",
               headers: accessHeaders,
@@ -352,8 +351,8 @@ export async function onRequest(context) {
       reqHeaders.set("X-Forwarded-Proto", "https");
       reqHeaders.set("Connection", "keep-alive");
 
-      // Realistic timeouts: 120s for file uploads, 60s for PDF streams, 22s for standard API calls
-      const timeoutMs = isMultipartUpload ? 120000 : isStreamRequest ? 60000 : 22000;
+      // Realistic timeouts: 120s for file uploads & large 50-100MB PDF streams, 25s for standard API calls
+      const timeoutMs = isMultipartUpload || isStreamRequest ? 120000 : 25000;
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -389,22 +388,44 @@ export async function onRequest(context) {
         (contentType.includes("text/html") && url.pathname.startsWith("/api/") && (response.status >= 500 || response.status === 200));
 
       if (isServerDown) {
-        unhealthyOrigins.set(origin, Date.now() + UNHEALTHY_COOLDOWN_MS);
+        // Only cooldown origin on true infra/gateway outage (502/504/520-526/402/disabled/HTML), NOT transient 503 PDF storage warmups
+        if (response.status !== 503 || contentType.includes("text/html") || response.headers.get("x-node-disabled") === "true") {
+          unhealthyOrigins.set(origin, Date.now() + UNHEALTHY_COOLDOWN_MS);
+        }
         if (i < attempts.length - 1) {
           continue; // Seamless failover to next backend
         }
-        // If all backends failed or last one is down/HTML/suspended -> NEVER return raw HTML to an /api/* endpoint!
+        // If browser iframe/document directly opened a PDF stream during temporary 503, show auto-retrying UI instead of raw JSON!
+        const secDest = (request.headers.get("sec-fetch-dest") || "").toLowerCase();
+        const acceptHdr = (request.headers.get("accept") || "").toLowerCase();
+        if (isStreamRequest && (secDest === "iframe" || secDest === "document" || acceptHdr.includes("text/html"))) {
+          return new Response(
+            `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reconnecting to Study Vault...</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f172a;color:#e2e8f0;font-family:system-ui,-apple-system,sans-serif;text-align:center;padding:24px}.box{max-width:360px;background:#1e293b;border:1px solid rgba(99,102,241,.4);border-radius:16px;padding:24px}h2{margin:0 0 8px;font-size:1.1rem}p{margin:0 0 16px;font-size:.9rem;color:#94a3b8}button{background:#4f46e5;color:#fff;border:0;border-radius:10px;padding:10px 18px;font-weight:700;cursor:pointer}</style></head><body><div class="box"><h2>Cloud Vault Reconnecting...</h2><p>Loading your study note from backup node. Retrying automatically in 3 seconds.</p><button onclick="location.reload()">Retry Now</button></div><script>setTimeout(function(){location.reload();},3000);</script></body></html>`,
+            {
+              status: 503,
+              headers: {
+                "Content-Type": "text/html; charset=utf-8",
+                "Cache-Control": "no-store",
+                "Retry-After": "3",
+              },
+            }
+          );
+        }
+        // Otherwise return structured JSON to fetch/API callers
         const isTrusted = reqOrigin && isTrustedOrigin(reqOrigin);
         return new Response(
           JSON.stringify({
             success: false,
             error: "CLUSTER_WAKING_UP",
-            message: "Cloud cluster node is spinning up. Please click refresh.",
+            retryable: true,
+            message: "Cloud cluster node is spinning up. Retrying automatically...",
           }),
           {
             status: 503,
             headers: {
               "Content-Type": "application/json",
+              "Cache-Control": "no-store",
+              "Retry-After": "3",
               "Access-Control-Allow-Origin": isTrusted ? reqOrigin : "*",
               ...(isTrusted ? { "Access-Control-Allow-Credentials": "true" } : {}),
             },

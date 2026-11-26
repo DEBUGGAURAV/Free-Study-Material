@@ -517,8 +517,10 @@ export async function acquireNoteDocument(noteId, {
       }${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}&filename=${encodeURIComponent(cleanName)}`;
 
       const workerController = new AbortController();
-      // 15s response-header timeout (handles cold Tier 4 Telegram fetches; cleared immediately once streaming begins)
-      const workerTimeout = setTimeout(() => workerController.abort(), 15000);
+      // Adaptive response-header timeout: 45s for large 25MB+ exam notes (cold MTProto warmup), 28s for standard notes; cleared once streaming begins
+      const expectedBytes = Number(note?.compressedSize || note?.fileSize || 0);
+      const workerHeaderTimeoutMs = expectedBytes > 25 * 1024 * 1024 ? 45000 : 28000;
+      const workerTimeout = setTimeout(() => workerController.abort(), workerHeaderTimeoutMs);
       if (signal) {
         signal.addEventListener("abort", () => workerController.abort(), { once: true });
       }
@@ -651,27 +653,44 @@ export async function acquireNoteDocument(noteId, {
     }
   }
 
-  // 🛡️ Auto-Retry for 503 Storage Warm-ups (gives background MTProto pull 2.2s to finish SSD caching)
-  if (!serverRes || serverRes.status === 503) {
+  // 🛡️ Auto-Retry for 502/503/504 Storage Warm-ups (tries Pages proxy + direct healthy cluster nodes so students never hit CLUSTER_WAKING_UP!)
+  if (!isValidPdfStreamResponse(serverRes) && (!serverRes || serverRes.status === 502 || serverRes.status === 503 || serverRes.status === 504)) {
     onProgress({
       tier: 4,
       tierLabel: "Tier 4: Cloud Storage Vault (Warming Up)",
       percent: 30,
-      speed: "Warming cloud vault stream (2.2s)...",
+      speed: "Warming cloud vault stream (2.5s)...",
       loadedMB: "0",
       totalMB: ((note?.compressedSize || note?.fileSize || 1048576) / (1024 * 1024)).toFixed(2),
       timeRemaining: "Retrying...",
       source: "telegram",
       icon: "☁️",
     });
-    await new Promise((r) => setTimeout(r, 2200));
-    try {
-      serverRes = await fetch(streamEndpointPath, {
-        headers: fetchHeaders,
-        signal,
-        credentials: "include",
-      });
-    } catch (_) {}
+    await new Promise((r) => setTimeout(r, 2500));
+    const retryTargets = [streamEndpointPath];
+    const clusterNodes = Array.isArray(BACKEND_CLUSTER_URLS) ? BACKEND_CLUSTER_URLS : [];
+    for (const clusterOrigin of clusterNodes) {
+      retryTargets.push(`${clusterOrigin}${streamEndpointPath}`);
+    }
+    for (const target of retryTargets) {
+      if (signal && signal.aborted) break;
+      try {
+        const isCross = target.startsWith("http");
+        const cand = await fetch(target, {
+          headers: fetchHeaders,
+          signal,
+          credentials: isCross && authToken ? "omit" : "include",
+        });
+        if (isValidPdfStreamResponse(cand)) {
+          serverRes = cand;
+          break;
+        }
+        if (cand && (cand.status === 401 || cand.status === 403 || cand.status === 404)) {
+          serverRes = cand;
+          break;
+        }
+      } catch (_) {}
+    }
   }
 
   if (!serverRes || (!serverRes.ok && serverRes.status !== 206)) {

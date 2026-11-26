@@ -1501,7 +1501,7 @@ async function streamDocumentFromChannel(messageId, res, rangeHeader = null, cac
     res.setHeader("Content-Length", totalSize);
   }
 
-  // 💽 Simultaneous Zero-RAM Pass-Through Disk Tee (for full non-range streams <= 50MB)
+  // 💽 Simultaneous Zero-RAM Pass-Through Disk Tee (for full non-range streams <= 100MB so 50-65MB exam notes cache on SSD!)
   let diskStream = null;
   let tmpPath = null;
   let binPath = null;
@@ -1512,7 +1512,7 @@ async function streamDocumentFromChannel(messageId, res, rangeHeader = null, cac
     cacheOptions.noteId &&
     cacheOptions.cdnCacheDir &&
     totalSize > 0 &&
-    totalSize <= 50 * 1024 * 1024
+    totalSize <= 100 * 1024 * 1024
   ) {
     try {
       const safeId = path.basename(String(cacheOptions.noteId)).replace(/[^a-zA-Z0-9_-]/g, "");
@@ -1589,11 +1589,24 @@ async function streamDocumentFromChannel(messageId, res, rangeHeader = null, cac
       if (remaining <= 0) break;
 
       const sliceToWrite = chunk.length > remaining ? chunk.slice(0, remaining) : chunk;
-      res.write(sliceToWrite);
+      const canContinue = res.write(sliceToWrite);
       if (diskStream) {
         try {
           diskStream.write(sliceToWrite);
         } catch (_) {}
+      }
+      if (!canContinue && !res.writableEnded && !res.destroyed) {
+        await new Promise((resolve) => {
+          const onDone = () => {
+            res.off("drain", onDone);
+            res.off("close", onDone);
+            res.off("error", onDone);
+            resolve();
+          };
+          res.once("drain", onDone);
+          res.once("close", onDone);
+          res.once("error", onDone);
+        });
       }
       bytesWritten += sliceToWrite.length;
 
