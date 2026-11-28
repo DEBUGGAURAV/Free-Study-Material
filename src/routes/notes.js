@@ -2226,6 +2226,8 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
           note: {
             id: note.id || id,
             title: note.title,
+            originalName: note.originalName || "",
+            fileName: note.fileName || "",
             subject: note.subject,
             course: note.course,
             branch: note.branch,

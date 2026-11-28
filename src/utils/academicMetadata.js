@@ -275,14 +275,16 @@ function parseTopicMetadata(threadTitle = "") {
  * 3. Filename patterns (universal subject matching without university-specific codes)
  * 4. Group / Chat title
  */
+const REAL_FILE_EXT_REGEX = /\.(?:pdf|docx?|pptx?|xlsx?|zip|rar|7z|png|jpe?g|webp|txt|md)$/i;
+const COURSE_CODE_REGEX = /\b(?:KCS|BCS|RCS|KOE|BOE|KAS|BAS|KEE|BEE|KME|BME|KCE|BCE|KIT|BIT|KEC|BEC|KNC|BNC|KVE|BVE|KHU|BHU|CS|IT|EC|EE|ME|CE|AI|DS)[-\s]?0?\d{3}[A-Z]?\b/gi;
+
 function extractAcademicMetadata({ fileName = "", caption = "", chatTitle = "", threadTitle = "" }) {
-  // 1. Sanitize file name for title (remove (1), [1], _LePic, and any university subject codes)
-  let title = fileName.replace(/\.[^/.]+$/, "").trim() || "Academic Study Material";
+  // 1. Sanitize file name for title — strip ONLY real file extensions (never chop titles with dots like "Unit 1.5" or "B.Tech")
+  let title = fileName.replace(REAL_FILE_EXT_REGEX, "").trim() || "Academic Study Material";
   title = title.replace(/\s*\(\d+\)\s*$/, "").replace(/\s*\[\d+\]\s*$/, "");
-  // Normalize delimiters first so word boundaries cleanly match subject codes
   title = title.replace(/[_\-]+/g, " ");
-  // Strip university-specific subject/course codes (e.g. KCS-501, CS301, BCS-301, KOE074, etc.)
-  title = title.replace(/\b[A-Z]{2,5}\s*0?\d{2,4}[A-Z]?\b/gi, " ");
+  // Strip ONLY real university course codes (e.g. KCS-501, BCS301, KOE074) — preserve words like AKTU 2024, PYQ 2023, Unit 10
+  title = title.replace(COURSE_CODE_REGEX, " ");
   title = title.replace(/\bLePic\b/gi, "").replace(/\s+/g, " ").trim();
 
   let subject = "";
@@ -299,11 +301,11 @@ function extractAcademicMetadata({ fileName = "", caption = "", chatTitle = "", 
         const rawT = line.replace(/^Title:\s*/i, "").trim();
         if (rawT) {
           title = rawT
-            .replace(/\.[^/.]+$/, "")
+            .replace(REAL_FILE_EXT_REGEX, "")
             .replace(/\s*\(\d+\)\s*$/, "")
             .replace(/\s*\[\d+\]\s*$/, "")
             .replace(/[_\-]+/g, " ")
-            .replace(/\b[A-Z]{2,5}\s*0?\d{2,4}[A-Z]?\b/gi, " ")
+            .replace(COURSE_CODE_REGEX, " ")
             .replace(/\bLePic\b/gi, "")
             .replace(/\s+/g, " ")
             .trim() || rawT;

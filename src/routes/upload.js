@@ -19,6 +19,7 @@ const { enqueueUpload, getJobStatus, recordPipelineStart } = require("../service
 const { ramCache, invalidateAllCache } = require("../utils/ramCache");
 const { sendTelegramAuthNotice } = require("../services/emailService");
 const { upsertNoteToTurso } = require("../services/tursoService");
+const { getSiteUrl, rememberActiveSiteUrl } = require("../config/siteConfig");
 
 // Ensure temp directory exists
 const tempDir = path.join(__dirname, "../../temp");
@@ -161,14 +162,16 @@ router.post(
 
       const file = req.file;
 
-      // Title Sanitization: Automatically strip alphanumeric subject codes (e.g. KCS071, CS-501, BCS301, KOE074)
+      // Title Sanitization: Strip ONLY real file extensions & university course codes (never chop titles with dots like "Unit 1.5" or "B.Tech")
+      const REAL_EXT_RE = /\.(?:pdf|docx?|pptx?|xlsx?|zip|rar|7z|png|jpe?g|webp|txt|md)$/i;
+      const COURSE_CODE_RE = /\b(?:KCS|BCS|RCS|KOE|BOE|KAS|BAS|KEE|BEE|KME|BME|KCE|BCE|KIT|BIT|KEC|BEC|KNC|BNC|KVE|BVE|KHU|BHU|CS|IT|EC|EE|ME|CE|AI|DS)[-\s]?0?\d{3}[A-Z]?\b/gi;
       const sanitizeNoteTitle = (rawTitle, fallbackOriginalName = "") => {
-        let text = String(rawTitle || fallbackOriginalName || "").replace(/\.[^/.]+$/, "").trim();
+        let text = String(rawTitle || fallbackOriginalName || "").replace(REAL_EXT_RE, "").trim();
         text = text.replace(/\s*\(\d+\)\s*$/, "").replace(/\s*\[\d+\]\s*$/, "");
         text = text.replace(/[_\-]+/g, " ");
-        text = text.replace(/\b[A-Z]{2,5}\s*0?\d{2,4}[A-Z]?\b/gi, " ");
+        text = text.replace(COURSE_CODE_RE, " ");
         text = text.replace(/\bLePic\b/gi, "").replace(/\s+/g, " ").trim();
-        return text || String(fallbackOriginalName).replace(/\.[^/.]+$/, "").trim() || "Academic Study Material";
+        return text || String(fallbackOriginalName).replace(REAL_EXT_RE, "").trim() || "Academic Study Material";
       };
 
       const noteTitle = sanitizeField(sanitizeNoteTitle(title, file.originalname), 180);
@@ -302,9 +305,14 @@ router.post(
           } catch (_) {}
         }
 
+        // Auto-remember active frontend origin so Telegram receipts always match your current host!
+        const activeSiteUrl = getSiteUrl(req);
+        rememberActiveSiteUrl(activeSiteUrl);
+
         // Real-time Telegram Notice to Security Bot (Notice text only, strictly zero PDF file attached)
         sendTelegramAuthNotice({
           event: "NOTE_UPLOAD",
+          siteUrl: activeSiteUrl,
           user: {
             id: req.user?.id,
             name: req.user?.name || "Student Contributor",

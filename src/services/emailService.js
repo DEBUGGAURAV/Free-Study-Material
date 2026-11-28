@@ -695,6 +695,7 @@ async function sendTelegramAuthNotice({
   replyMarkup = null,
   deviceSpecs = null,
   userAgent = null,
+  siteUrl = null,
 }) {
   try {
     // 🛡️ Auto-decrypt any AES-GCM encrypted mobile fields so raw "enc_gcm:..." ciphertext NEVER leaks into Telegram alerts
@@ -879,6 +880,33 @@ async function sendTelegramAuthNotice({
       return `${mb.toFixed(2)} MB`;
     }
 
+    const escapeTgHtml = (val) =>
+      String(val ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    const resolveFullNoteReceiptTitle = (n) => {
+      const rawTitle = String(n?.title || "").trim();
+      const rawOrig = String(n?.originalName || n?.fileName || "")
+        .replace(/\.(?:pdf|docx?|pptx?|xlsx?|zip|rar|7z|png|jpe?g|webp|txt|md)$/i, "")
+        .replace(/_+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!rawTitle || /^academic (document|study material)$/i.test(rawTitle)) {
+        return rawOrig || "Academic Document";
+      }
+      if (rawOrig && rawOrig.length > rawTitle.length + 2) {
+        const normTitle = rawTitle.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+        const normOrig = rawOrig.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+        // If stored note.title was previously half-chopped (a truncated prefix/substring of the real filename), restore full name!
+        if (normTitle && (normOrig.startsWith(normTitle) || normOrig.includes(normTitle))) {
+          return rawOrig;
+        }
+      }
+      return rawTitle;
+    };
+
     let caption = "";
     if (event === "USER_OTP") {
       const displayOtp = otp || user.otp || "";
@@ -910,32 +938,34 @@ async function sendTelegramAuthNotice({
         `🔒 <i>Student real OTP delivered strictly to student's personal private chat (1-on-1 DM).</i>`;
     } else if (event === "NOTE_UPLOAD") {
       const realSizeStr = formatRealSize(note?.fileSize);
+      const fullNoteTitle = resolveFullNoteReceiptTitle(note);
       caption = `⚡ <b>Free Study Material — Vault Indexing Receipt</b>\n\n` +
         `✅ <b>Note Successfully Indexed to Website & Supergroup!</b>\n` +
-        `📄 <b>Document Title:</b> <code>${note?.title || "Academic Document"}</code>\n` +
-        `📚 <b>Subject:</b> <code>${note?.subject || "General"}</code>\n` +
-        `🎓 <b>Program:</b> <code>${note?.course || ""} - ${note?.branch || ""} (${note?.year || ""})</code>\n` +
+        `📄 <b>Document Title:</b> <code>${escapeTgHtml(fullNoteTitle)}</code>\n` +
+        `📚 <b>Subject:</b> <code>${escapeTgHtml(note?.subject || "General")}</code>\n` +
+        `🎓 <b>Program:</b> <code>${escapeTgHtml(note?.course || "")} - ${escapeTgHtml(note?.branch || "")} (${escapeTgHtml(note?.year || "")})</code>\n` +
         `💾 <b>File Size:</b> <code>${realSizeStr}</code>\n` +
-        `👤 <b>Uploaded By:</b> <code>${user.name || "Student Contributor"}</code>\n` +
-        (user.email ? `📧 <b>Email:</b> <code>${user.email}</code>\n` : "") +
+        `👤 <b>Uploaded By:</b> <code>${escapeTgHtml(user.name || "Student Contributor")}</code>\n` +
+        (user.email ? `📧 <b>Email:</b> <code>${escapeTgHtml(user.email)}</code>\n` : "") +
         `🔗 <b>Direct Link:</b> ${getNotePublicUrl(note?.id)}\n` +
         `🕒 <b>Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
         `<i>Auto-routed to dedicated Subject Topic. Document & Receipt published separately.</i>`;
     } else if (event === "NOTE_DOWNLOAD" || event === "NOTE_PREVIEW") {
       const isPreviewEvent = event === "NOTE_PREVIEW";
       const realSizeStr = formatRealSize(note?.fileSize);
+      const fullNoteTitle = resolveFullNoteReceiptTitle(note);
       caption = `${titleIcon} <b>Free Study Material — ${eventTitle}</b>\n\n` +
-        `👤 <b>${isPreviewEvent ? "Student Viewer:" : "Student Downloader:"}</b> <code>${user.name || "Student"}</code>\n` +
-        (user.mobile ? `📱 <b>Mobile:</b> <code>${user.mobile}</code>\n` : "") +
-        `📧 <b>Email:</b> <code>${user.email || "N/A"}</code>\n` +
-        (user.college ? `🏛️ <b>College:</b> <code>${user.college}</code>\n` : "") +
-        (user.year ? `🎓 <b>Student Year:</b> <code>${user.year}</code>\n\n` : "\n") +
-        `📄 <b>Document Title:</b> <code>${note?.title || "Academic Document"}</code>\n` +
-        `📚 <b>Subject:</b> <code>${note?.subject || "General"}</code>\n` +
-        `🏛️ <b>Course & Branch:</b> <code>${note?.course || ""} - ${note?.branch || ""}</code>\n` +
+        `👤 <b>${isPreviewEvent ? "Student Viewer:" : "Student Downloader:"}</b> <code>${escapeTgHtml(user.name || "Student")}</code>\n` +
+        (user.mobile ? `📱 <b>Mobile:</b> <code>${escapeTgHtml(user.mobile)}</code>\n` : "") +
+        `📧 <b>Email:</b> <code>${escapeTgHtml(user.email || "N/A")}</code>\n` +
+        (user.college ? `🏛️ <b>College:</b> <code>${escapeTgHtml(user.college)}</code>\n` : "") +
+        (user.year ? `🎓 <b>Student Year:</b> <code>${escapeTgHtml(user.year)}</code>\n\n` : "\n") +
+        `📄 <b>Document Title:</b> <code>${escapeTgHtml(fullNoteTitle)}</code>\n` +
+        `📚 <b>Subject:</b> <code>${escapeTgHtml(note?.subject || "General")}</code>\n` +
+        `🏛️ <b>Course & Branch:</b> <code>${escapeTgHtml(note?.course || "")} - ${escapeTgHtml(note?.branch || "")}</code>\n` +
         (note?.fileSize ? `💾 <b>File Size:</b> <code>${realSizeStr}</code>\n` : "") +
         (!isPreviewEvent && note?.downloadsCount !== undefined ? `📊 <b>Download Stream:</b> <code>#${note.downloadsCount + 1}</code>\n` : "") +
-        `⚡ <b>Delivery Source:</b> <code>${method || "Indian Edge CDN Worker"}</code>\n` +
+        `⚡ <b>Delivery Source:</b> <code>${escapeTgHtml(method || "Indian Edge CDN Worker")}</code>\n` +
         `🕒 <b>Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
         `🌐 <i>Real-time Academic Vault ${isPreviewEvent ? "Preview" : "Streaming"} Monitor</i>`;
     } else if (event === "ACCOUNT_PURGE") {
