@@ -370,6 +370,7 @@ export async function acquireNoteDocument(noteId, {
   token = null,
   signal = null,
   fileHandle = null,
+  skipOfflineSave = false,
   onProgress = () => {},
 } = {}) {
   const cleanId = String(noteId).trim();
@@ -565,7 +566,9 @@ export async function acquireNoteDocument(noteId, {
         });
 
         if (isValidPdfArrayBuffer(buffer)) {
-          saveToClientOfflineStorage(cleanId, note, buffer);
+          if (!skipOfflineSave) {
+            saveToClientOfflineStorage(cleanId, note, buffer);
+          }
           let blob = null;
           if (mode === "download") {
             blob = await triggerBrowserDownload(buffer, cleanName, fileHandle);
@@ -770,8 +773,10 @@ export async function acquireNoteDocument(noteId, {
     throw new Error("Received invalid or corrupted document stream from server.");
   }
 
-  // Background: Pre-cache in IndexedDB & memory so subsequent calls are Tier 1 (0ms Hit)
-  saveToClientOfflineStorage(cleanId, note, buffer);
+  // Background: Pre-cache in IndexedDB & memory unless document is read-only download-locked
+  if (!skipOfflineSave) {
+    saveToClientOfflineStorage(cleanId, note, buffer);
+  }
 
   let blob = null;
   if (mode === "download") {

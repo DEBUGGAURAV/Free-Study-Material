@@ -3084,6 +3084,7 @@ router.get("/me", authenticateToken, async (req, res) => {
           permissions: data.permissions || [],
           allowedTabs: Array.isArray(data.allowedTabs) ? data.allowedTabs : [],
           isBlocked: data.isBlocked || false,
+          canDownloadNotes: Boolean(data.canDownloadNotes === true),
           hasPasskey: Boolean(data.hasPasskey || (data.passkeys && data.passkeys.length > 0)),
         },
       });

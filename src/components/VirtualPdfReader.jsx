@@ -1386,19 +1386,49 @@ export default function VirtualPdfReader({
     };
   }, [showVoiceMenu]);
 
-  // Anti-Save & Anti-Print Guardian for Protected Notes
+  // 🛡️ Strict Anti-Save, Anti-Print & Anti-Right-Click Guardian for Read-Only Protected Notes
   useEffect(() => {
     if (!isBlocked) return;
+    const notifyLocked = () => {
+      setOcrStatusText("🔒 Download, Save & Print are disabled by the administrator. Online reading is active.");
+      setTimeout(() => setOcrStatusText(""), 4500);
+    };
     const preventSavePrint = (e) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === "p" || e.key === "P" || e.key === "s" || e.key === "S")) {
         e.preventDefault();
         e.stopPropagation();
-        setOcrStatusText("🔒 Saving and Printing are disabled for this document by the administrator. Online reading is active.");
-        setTimeout(() => setOcrStatusText(""), 4500);
+        notifyLocked();
       }
     };
+    const preventContextMenu = (e) => {
+      const tag = (e.target?.tagName || "").toUpperCase();
+      if (tag === "CANVAS" || tag === "IMG" || e.target?.closest?.(".preview-reader-modal")) {
+        e.preventDefault();
+        notifyLocked();
+      }
+    };
+    const preventDrag = (e) => {
+      if (e.target?.closest?.(".preview-reader-modal")) {
+        e.preventDefault();
+      }
+    };
+    const origPrint = window.print;
+    try {
+      window.print = () => {
+        notifyLocked();
+      };
+    } catch (_) {}
     window.addEventListener("keydown", preventSavePrint, true);
-    return () => window.removeEventListener("keydown", preventSavePrint, true);
+    window.addEventListener("contextmenu", preventContextMenu, true);
+    window.addEventListener("dragstart", preventDrag, true);
+    window.addEventListener("beforeprint", notifyLocked, true);
+    return () => {
+      try { window.print = origPrint; } catch (_) {}
+      window.removeEventListener("keydown", preventSavePrint, true);
+      window.removeEventListener("contextmenu", preventContextMenu, true);
+      window.removeEventListener("dragstart", preventDrag, true);
+      window.removeEventListener("beforeprint", notifyLocked, true);
+    };
   }, [isBlocked]);
 
   // 4. Yjs + WebRTC P2P Study Room
@@ -1696,6 +1726,7 @@ export default function VirtualPdfReader({
           note,
           token,
           signal: loadAbortController.signal,
+          skipOfflineSave: isBlocked,
           onProgress: (m) => {
             if (isCancelled || loadGenerationRef.current !== currentGeneration) return;
             const loaded = Math.round(parseFloat(m.loadedMB || 0) * 1024 * 1024);
@@ -6668,21 +6699,23 @@ export default function VirtualPdfReader({
                     gap: "8px",
                   }}
                 >
-                  <span>💡 If your browser restricts embedded preview:</span>
+                  <span>💡 {isBlocked ? "Read-Only Mode active (Download & New Tab disabled by Admin):" : "If your browser restricts embedded preview:"}</span>
                   <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                    <a
-                      href={nativeSrc || `/api/notes/${noteId || note?.id}/stream.pdf?preview=1`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        color: "#38bdf8",
-                        fontWeight: 700,
-                        textDecoration: "underline",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Open Document in New Tab ↗
-                    </a>
+                    {!isBlocked && (
+                      <a
+                        href={nativeSrc || `/api/notes/${noteId || note?.id}/stream.pdf?preview=1`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          color: "#38bdf8",
+                          fontWeight: 700,
+                          textDecoration: "underline",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Open Document in New Tab ↗
+                      </a>
+                    )}
                     <button
                       type="button"
                       onClick={() => {

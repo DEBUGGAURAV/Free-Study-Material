@@ -842,6 +842,38 @@ export default function TabStudents(props) {
                         ⏱️
                       </button>
 
+                      {/* Per-Student Download & Print Permission Toggle */}
+                      <button
+                        onClick={async () => {
+                          const nextAllow = !Boolean(student.canDownloadNotes);
+                          const actionWord = nextAllow ? "GRANT Download & Print permission to" : "REVOKE Download & Print permission from";
+                          if (!window.confirm(`${actionWord} ${student.name} (${student.email})?`)) return;
+                          try {
+                            const res = await api.setUserDownloadPermission(student.id, nextAllow);
+                            alert(`✅ ${res.message || "Updated download permission."}`);
+                            if (typeof loadStudents === "function") loadStudents();
+                          } catch (err) {
+                            alert(`❌ Failed to update permission: ${err.message}`);
+                          }
+                        }}
+                        className="btn-icon"
+                        style={{
+                          width: "30px",
+                          height: "30px",
+                          background: student.canDownloadNotes ? "rgba(16, 185, 129, 0.2)" : "rgba(239, 68, 68, 0.14)",
+                          border: student.canDownloadNotes ? "1px solid rgba(16, 185, 129, 0.45)" : "1px solid rgba(239, 68, 68, 0.35)",
+                          color: student.canDownloadNotes ? "#34d399" : "#fca5a5",
+                          fontSize: "0.75rem",
+                        }}
+                        title={
+                          student.canDownloadNotes
+                            ? "Download & Print ALLOWED for this student (Click to Revoke)"
+                            : "Download & Print LOCKED for this student (Click to Grant Permission)"
+                        }
+                      >
+                        {student.canDownloadNotes ? "🔓" : "🔒"}
+                      </button>
+
                       {/* Block / Unblock */}
                       <button
                         onClick={() => handleToggleBlock(student)}

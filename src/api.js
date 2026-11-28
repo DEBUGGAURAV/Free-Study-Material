@@ -1349,6 +1349,12 @@ export const api = {
       body: JSON.stringify({ isBlocked }),
     }),
 
+  setUserDownloadPermission: (userId, canDownloadNotes) =>
+    request(`/admin/users/${userId}/download-permission`, {
+      method: "PATCH",
+      body: JSON.stringify({ canDownloadNotes: Boolean(canDownloadNotes) }),
+    }),
+
   deleteUser: (userId) =>
     request(`/admin/users/${userId}`, {
       method: "DELETE",

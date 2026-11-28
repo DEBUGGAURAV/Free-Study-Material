@@ -87,9 +87,10 @@ export default function PreviewModal({
     (Array.isArray(currentUser?.permissions) && currentUser.permissions.includes("all"));
 
   const isSingleNoteDisabled = note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0";
+  const hasPersonalDownloadGrant = Boolean(currentUser?.canDownloadNotes === true);
   const isBlocked = isAdmin
     ? Boolean(isSingleNoteDisabled)
-    : Boolean(!allowNotesDownload || allowNotesDownload === "false" || isSingleNoteDisabled);
+    : Boolean(isSingleNoteDisabled || ((!allowNotesDownload || allowNotesDownload === "false") && !hasPersonalDownloadGrant));
   const effectiveReason = note.downloadDisabledReason || downloadDisabledReason || (isSingleNoteDisabled ? "Download for this specific note has been disabled by the administrator. You can still read and study all pages here in the Online Reader!" : "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.");
 
   const finalFileName = getNotePdfFileName(note);

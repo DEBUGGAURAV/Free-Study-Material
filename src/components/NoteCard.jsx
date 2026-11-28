@@ -229,9 +229,10 @@ function NoteCard({
     currentUser?.isMasterAdmin ||
     (currentUser?.permissions && currentUser.permissions.includes("all"))
   );
+  const hasPersonalDownloadGrant = Boolean(currentUser?.canDownloadNotes === true);
   const isNoteDownloadBlocked = isAdminUser
     ? Boolean(isSingleNoteDisabled)
-    : Boolean(isSingleNoteDisabled || allowNotesDownload === false || allowNotesDownload === "false");
+    : Boolean(isSingleNoteDisabled || ((allowNotesDownload === false || allowNotesDownload === "false") && !hasPersonalDownloadGrant));
 
   // 1. Direct Device Native Share: PNG Image Attached + Clean Text & Link + Direct OS Share Sheet
   const handleShareNote = async (e) => {

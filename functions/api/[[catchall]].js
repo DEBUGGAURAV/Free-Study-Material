@@ -143,11 +143,17 @@ export async function onRequest(context) {
           if (aDead === bDead) return 0;
           return aDead ? 1 : -1;
         });
+        const isDirectTabNav =
+          request.headers.get("sec-fetch-dest") === "document" ||
+          request.headers.get("sec-fetch-mode") === "navigate";
         for (const accOrigin of accessOrigins) {
           const accessUrl = new URL(`/api/notes/${encodeURIComponent(noteId)}/access`, accOrigin);
           for (const pName of ["ticket", "download", "attachment"]) {
             const val = url.searchParams.get(pName);
             if (val) accessUrl.searchParams.set(pName, val);
+          }
+          if (isDirectTabNav) {
+            accessUrl.searchParams.set("download", "1");
           }
           try {
             const ac = new AbortController();

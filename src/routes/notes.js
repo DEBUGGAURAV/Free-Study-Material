@@ -1321,6 +1321,7 @@ router.get("/:id/access", downloadLimiter, authenticateToken, async (req, res) =
         noteData.allowDownload === "0";
 
       let globalDownloadAllowed = true;
+      let userDownloadGranted = false;
       let globalReason = "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.";
       try {
         const adminRoutes = require("./admin");
@@ -1331,9 +1332,14 @@ router.get("/:id/access", downloadLimiter, authenticateToken, async (req, res) =
           const tSet = adminRoutes.getTechSettings();
           if (tSet?.downloadDisabledReason) globalReason = tSet.downloadDisabledReason;
         }
+        if (!callerIsAdmin && !globalDownloadAllowed && user?.id && typeof adminRoutes.hasUserDownloadPermission === "function") {
+          userDownloadGranted = await adminRoutes.hasUserDownloadPermission(user.id);
+        }
       } catch (_) {}
 
-      const blockedForCaller = callerIsAdmin ? isSingleDisabled : Boolean(isSingleDisabled || !globalDownloadAllowed);
+      const blockedForCaller = callerIsAdmin
+        ? isSingleDisabled
+        : Boolean(isSingleDisabled || (!globalDownloadAllowed && !userDownloadGranted));
       if (blockedForCaller) {
         return res.status(403).json({
           success: false,
@@ -2122,42 +2128,49 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     );
     const isAdminInspectBypass = isDownloadAdmin && req.query.admin_inspect === "1";
 
-    if (isDownload) {
-      let downloadAllowed = true;
-      let pauseReason = "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.";
-      try {
-        const adminRoutes = require("./admin");
-        if (adminRoutes.isDownloadAllowed) {
-          downloadAllowed = adminRoutes.isDownloadAllowed();
-        }
-        if (adminRoutes.getTechSettings) {
-          const tSet = adminRoutes.getTechSettings();
-          if (tSet && tSet.downloadDisabledReason) pauseReason = tSet.downloadDisabledReason;
-        }
-      } catch (_) {}
-
-      const effectiveReason = note.downloadDisabledReason || pauseReason;
-      // Match /access & Frontend policy: Admins can still download unlocked notes during a global student download pause
-      const isBlockedForCaller = isDownloadAdmin
-        ? isNoteDownloadDisabled
-        : Boolean(!downloadAllowed || isNoteDownloadDisabled);
-
-      if (isBlockedForCaller && !isAdminInspectBypass) {
-        const isHtmlRequest =
-          req.headers["sec-fetch-dest"] === "document" ||
-          req.headers["sec-fetch-mode"] === "navigate" ||
-          Boolean(req.headers["accept"] && req.headers["accept"].includes("text/html"));
-
-        if (isHtmlRequest) {
-          return res.status(403).send(renderDownloadPausedHtml(note.title, note.id || id, effectiveReason));
-        }
-
-        return res.status(403).json({
-          success: false,
-          downloadsDisabled: true,
-          message: effectiveReason,
-        });
+    // 🔒 Enforce Download Permission (Global Lock + Per-Student Grant + Per-Note Lock)
+    // ALSO blocks direct browser-tab navigation to /stream.pdf?preview=1 (prevents Save/Print bypass in raw Chrome PDF tab!)
+    let downloadAllowed = true;
+    let userDownloadGranted = false;
+    let pauseReason = "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.";
+    try {
+      const adminRoutes = require("./admin");
+      if (adminRoutes.isDownloadAllowed) {
+        downloadAllowed = adminRoutes.isDownloadAllowed();
       }
+      if (adminRoutes.getTechSettings) {
+        const tSet = adminRoutes.getTechSettings();
+        if (tSet && tSet.downloadDisabledReason) pauseReason = tSet.downloadDisabledReason;
+      }
+      if (!isDownloadAdmin && !downloadAllowed && requestingUser?.id && typeof adminRoutes.hasUserDownloadPermission === "function") {
+        userDownloadGranted = await adminRoutes.hasUserDownloadPermission(requestingUser.id);
+      }
+    } catch (_) {}
+
+    const effectiveReason = note.downloadDisabledReason || pauseReason;
+    // Admins can download unlocked notes; Students can download ONLY if note is unlocked AND (Global ON OR Admin granted per-student permission)
+    const isBlockedForCaller = isDownloadAdmin
+      ? isNoteDownloadDisabled
+      : Boolean(isNoteDownloadDisabled || (!downloadAllowed && !userDownloadGranted));
+
+    const isDirectTabNav =
+      req.headers["sec-fetch-dest"] === "document" ||
+      req.headers["sec-fetch-mode"] === "navigate";
+
+    if (isBlockedForCaller && !isAdminInspectBypass && (isDownload || isDirectTabNav)) {
+      const isHtmlRequest =
+        isDirectTabNav ||
+        Boolean(req.headers["accept"] && req.headers["accept"].includes("text/html"));
+
+      if (isHtmlRequest) {
+        return res.status(403).send(renderDownloadPausedHtml(note.title, note.id || id, effectiveReason));
+      }
+
+      return res.status(403).json({
+        success: false,
+        downloadsDisabled: true,
+        message: effectiveReason,
+      });
     }
 
     // ⚡ Zero-Render Bandwidth Offloader:

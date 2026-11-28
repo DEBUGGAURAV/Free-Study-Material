@@ -1031,6 +1031,69 @@ router.patch("/users/:id/block", authenticateToken, checkAdminOrPermission("mana
   }
 });
 
+// 🔒 Fast 30s RAM cache for per-student download permissions (zero extra Firestore reads on stream checks)
+const userDownloadPermCache = new Map(); // userId -> { allowed: boolean, expiresAt: number }
+
+function clearUserDownloadPermissionCache(userId) {
+  if (userId) userDownloadPermCache.delete(String(userId));
+}
+
+async function hasUserDownloadPermission(userId) {
+  if (!userId || userId === "admin-root") return false;
+  const key = String(userId);
+  const cached = userDownloadPermCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.allowed;
+  }
+  if (!db) return false;
+  try {
+    const snap = await db.collection("users").doc(key).get();
+    const allowed = Boolean(snap.exists && snap.data()?.canDownloadNotes === true);
+    userDownloadPermCache.set(key, { allowed, expiresAt: Date.now() + 30000 });
+    return allowed;
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * PATCH /api/admin/users/:id/download-permission
+ * Grants or revokes per-student Notes Download & Print permission (overrides Global Download Pause for approved students)
+ */
+router.patch("/users/:id/download-permission", authenticateToken, checkAdminOrPermission("manage_users"), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { canDownloadNotes } = req.body || {};
+    if (!checkDb(res, "DB unavailable")) return;
+
+    const docRef = db.collection("users").doc(id);
+    const doc = await docRef.get();
+    if (!doc.exists) return res.status(404).json({ success: false, message: "User not found" });
+
+    const granted = Boolean(canDownloadNotes);
+    await docRef.update({
+      canDownloadNotes: granted,
+      downloadPermissionUpdatedAt: new Date().toISOString(),
+      downloadPermissionUpdatedBy: req.user?.email || "Admin",
+      updatedAt: new Date().toISOString(),
+    });
+
+    clearUserDownloadPermissionCache(id);
+    userDownloadPermCache.set(String(id), { allowed: granted, expiresAt: Date.now() + 30000 });
+
+    return res.json({
+      success: true,
+      userId: id,
+      canDownloadNotes: granted,
+      message: granted
+        ? "Download & Print permission GRANTED for this student."
+        : "Download & Print permission REVOKED for this student (Read-Only mode).",
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 /**
  * DELETE /api/admin/users/:id
  * Deletes a student from database
@@ -6193,6 +6256,8 @@ router.getCdnRetentionSeconds = getCdnRetentionSeconds;
 router.getCdnRetentionDays = getCdnRetentionDays;
 router.getTechSettings = getTechSettings;
 router.isDownloadAllowed = isDownloadAllowed;
+router.hasUserDownloadPermission = hasUserDownloadPermission;
+router.clearUserDownloadPermissionCache = clearUserDownloadPermissionCache;
 router.purgeEdgeCatalogCache = purgeEdgeCatalogCache;
 
 module.exports = router;
