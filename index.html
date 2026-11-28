@@ -185,8 +185,12 @@
       .theme-btn {
         width: 38px; height: 38px; padding: 0; border-radius: 10px;
         background: var(--bg-soft); border: 1px solid var(--border); color: var(--text);
-        cursor: pointer; font-size: 1rem; display: grid; place-items: center;
+        cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+        transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease, transform 0.2s ease;
       }
+      .theme-btn:hover { border-color: var(--primary); color: var(--primary); transform: translateY(-1px); }
+      .theme-btn svg { width: 18px; height: 18px; display: block; transition: transform 0.28s ease; }
+      .theme-btn:active svg { transform: rotate(30deg) scale(0.92); }
 
       /* Hero */
       .hero {
@@ -320,7 +324,12 @@
           <a href="/help">Help</a>
         </nav>
         <div class="nav-actions">
-          <button id="themeToggle" class="theme-btn" type="button" aria-label="Toggle theme" title="Switch Light/Dark Theme">🌙</button>
+          <button id="themeToggle" class="theme-btn" type="button" aria-label="Switch theme" title="Switch Light / Dark Theme">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"></circle>
+              <path d="M12 3a9 9 0 0 0 0 18V3z" fill="currentColor" stroke="none"></path>
+            </svg>
+          </button>
           <a href="/notes?auth=signin" class="btn btn-ghost">Sign In</a>
           <a href="/notes?auth=signup" class="btn btn-primary">Free Sign Up</a>
         </div>
@@ -447,10 +456,15 @@
     <script>
       (function () {
         var btn = document.getElementById("themeToggle");
+        var ICON_CONTRAST = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 3a9 9 0 0 0 0 18V3z" fill="currentColor" stroke="none"></path></svg>';
+        var ICON_SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path></svg>';
         function syncIcon() {
           if (!btn) return;
           var dark = document.documentElement.getAttribute("data-theme") === "dark";
-          btn.textContent = dark ? "☀️" : "🌙";
+          btn.innerHTML = dark ? ICON_SUN : ICON_CONTRAST;
+          btn.setAttribute("title", dark ? "Switch to Light Mode" : "Switch to Dark Mode");
+          var metaTheme = document.querySelector('meta[name="theme-color"]');
+          if (metaTheme) metaTheme.setAttribute("content", dark ? "#090d16" : "#4361ee");
         }
         syncIcon();
         if (btn) {
