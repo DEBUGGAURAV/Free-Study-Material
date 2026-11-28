@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { X, Send, Paperclip, Smile, Shield, Crown, Lock, Globe, Plus, Key, Users, Trash2, Edit2, Copy, Check, FileText, ExternalLink, Megaphone, RefreshCw, LogOut, Download, Eye, MoreVertical, CheckCircle, ArrowLeft, Share2, Mic, Volume2, VolumeX, CornerUpLeft, Play, Pause, BookOpen, ShieldOff, UserX, UserCheck, Camera, Search, Clock } from "lucide-react";
 import { api, getAuthToken, setAuthToken } from "../api";
+import { BACKEND_CLUSTER_URLS } from "../config/clientConfig";
 import { formatFileSize } from "../utils/formatUtils";
 import { wipeAllDeviceOfflineStorage } from "../utils/offlineQueue";
 import { playChatSound } from "../utils/soundEffects";
@@ -439,36 +440,82 @@ export default function StudentChatModal({
   };
 
   const [wsReconnectNonce, setWsReconnectNonce] = useState(0);
+  const [wsConnected, setWsConnected] = useState(false);
 
-  // Connect WebSocket
+  // Connect WebSocket (Same-Origin Pages WS Proxy -> Direct Render Cluster Failover + Auto-Reconnect + REST History Sync)
   useEffect(() => {
     if (!isOpen || !currentUser) return;
 
     loadRoomsAndNotice();
 
+    // Immediately hydrate messages via REST so chat is NEVER blank while WebSocket connects!
+    const initRoomId = currentRoomRef.current?.id || currentRoom?.id || "public";
+    api.getChatMessages(initRoomId)
+      .then((res) => {
+        if (res && res.success && Array.isArray(res.messages)) {
+          setMessages((prev) => (prev.length >= res.messages.length ? prev : res.messages));
+          setTimeout(() => scrollToBottom("auto"), 80);
+        }
+      })
+      .catch(() => {});
+
     let isCancelled = false;
     let ws = null;
+    let reconnectTimer = null;
+    let pingTimer = null;
+    let reconnectAttempts = 0;
 
-    const establishWebSocket = async () => {
-      let token = "";
-
-      // 1. Always attempt to acquire a fresh, ephemeral WebSocket ticket from server for zero-failure connectivity
-      try {
-        const res = await api.getChatWsToken({
-          userId: currentUser?.id,
-          email: currentUser?.email,
-        });
-        if (res?.token) {
-          token = res.token;
-          setAuthToken(token);
-        }
-      } catch (wsTokErr) {
-        console.warn("[CHAT-WS] Fresh token generation notice:", wsTokErr.message);
+    const buildWsCandidates = (token) => {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const host = window.location.host;
+      const q = `?token=${encodeURIComponent(token || "")}`;
+      const list = [`${protocol}//${host}/ws/chat${q}`];
+      const cluster = Array.isArray(BACKEND_CLUSTER_URLS) ? BACKEND_CLUSTER_URLS : [];
+      for (const origin of cluster) {
+        try {
+          const u = new URL(origin);
+          const wsProto = u.protocol === "https:" ? "wss:" : "ws:";
+          const candidate = `${wsProto}//${u.host}/ws/chat${q}`;
+          if (!list.includes(candidate)) list.push(candidate);
+        } catch (_) {}
       }
+      return list;
+    };
 
-      // 2. Fallback to existing stored token if available
+    const clearTimers = () => {
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      if (pingTimer) {
+        clearInterval(pingTimer);
+        pingTimer = null;
+      }
+    };
+
+    const establishWebSocket = async (candidateIndex = 0, existingToken = "") => {
+      clearTimers();
+      let token = existingToken;
+
       if (!token) {
-        token = getAuthToken() || "";
+        // 1. Always attempt to acquire a fresh, ephemeral WebSocket ticket from server for zero-failure connectivity
+        try {
+          const res = await api.getChatWsToken({
+            userId: currentUser?.id,
+            email: currentUser?.email,
+          });
+          if (res?.token) {
+            token = res.token;
+            setAuthToken(token);
+          }
+        } catch (wsTokErr) {
+          console.warn("[CHAT-WS] Fresh token generation notice:", wsTokErr.message);
+        }
+
+        // 2. Fallback to existing stored token if available
+        if (!token) {
+          token = getAuthToken() || "";
+        }
       }
 
       if (isCancelled) return;
@@ -480,14 +527,29 @@ export default function StudentChatModal({
       }
 
       setAuthError(null);
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const host = window.location.host;
-      const wsUrl = `${protocol}//${host}/ws/chat?token=${encodeURIComponent(token || "")}`;
+      const candidates = buildWsCandidates(token);
+      const wsUrl = candidates[candidateIndex % candidates.length];
+      let didOpen = false;
+      let isAuthRejected = false;
 
-      ws = new WebSocket(wsUrl);
+      try {
+        ws = new WebSocket(wsUrl);
+      } catch (ctorErr) {
+        if (candidateIndex + 1 < candidates.length) {
+          return establishWebSocket(candidateIndex + 1, token);
+        }
+        return;
+      }
       wsRef.current = ws;
 
       ws.onopen = () => {
+        if (isCancelled) {
+          try { ws.close(); } catch (_) {}
+          return;
+        }
+        didOpen = true;
+        reconnectAttempts = 0;
+        setWsConnected(true);
         const activeRoom = currentRoomRef.current || currentRoom;
         // Automatically join current room on connect
         ws.send(
@@ -497,11 +559,18 @@ export default function StudentChatModal({
             secretCode: activeRoom.secretCode || "",
           })
         );
+        // Keepalive JSON ping every 25s (prevents Cloudflare / mobile NAT silent disconnects)
+        pingTimer = setInterval(() => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            try { ws.send(JSON.stringify({ type: "ping" })); } catch (_) {}
+          }
+        }, 25000);
       };
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          if (data.type === "pong" || data.type === "PONG" || data.type === "EDGE_ACK") return;
 
           if (data.type === "room_joined") {
           setMessages(data.messages || []);
@@ -758,17 +827,66 @@ export default function StudentChatModal({
       ws.onerror = (err) => {
         console.warn("[CHAT-WS] Socket error:", err);
       };
+
+      ws.onclose = (ev) => {
+        clearTimers();
+        setWsConnected(false);
+        if (isCancelled) return;
+        if (ev && ev.code === 1008) {
+          isAuthRejected = true;
+          return;
+        }
+        // If handshake never opened on this candidate, immediately failover to next direct backend WS URL!
+        if (!didOpen && candidateIndex + 1 < candidates.length && !isAuthRejected) {
+          establishWebSocket(candidateIndex + 1, token);
+          return;
+        }
+        // Auto-reconnect with bounded backoff (2s -> 4s -> 6s)
+        if (!isAuthRejected && reconnectAttempts < 8) {
+          reconnectAttempts += 1;
+          const delay = Math.min(6000, reconnectAttempts * 2000);
+          reconnectTimer = setTimeout(() => {
+            if (!isCancelled) establishWebSocket(0, "");
+          }, delay);
+        }
+      };
     };
 
-    establishWebSocket();
+    establishWebSocket(0, "");
 
     return () => {
       isCancelled = true;
+      clearTimers();
+      setWsConnected(false);
       if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
         ws.close();
       }
     };
   }, [isOpen, currentUser?.id, wsReconnectNonce]);
+
+  // 🔄 Seamless REST Backup Sync ONLY while WebSocket is disconnected (0 extra load when WS is live!)
+  useEffect(() => {
+    if (!isOpen || !currentUser || wsConnected) return;
+    const pollId = setInterval(() => {
+      const activeRoomId = currentRoomRef.current?.id || "public";
+      api.getChatMessages(activeRoomId)
+        .then((res) => {
+          if (res && res.success && Array.isArray(res.messages)) {
+            setMessages((prev) => {
+              if (
+                prev.length === res.messages.length &&
+                prev[prev.length - 1]?.id === res.messages[res.messages.length - 1]?.id
+              ) {
+                return prev;
+              }
+              return res.messages;
+            });
+          }
+        })
+        .catch(() => {});
+    }, 4000);
+    return () => clearInterval(pollId);
+  }, [isOpen, currentUser?.id, wsConnected]);
 
   // 🛡️ Mobile Keyboard Viewport Adjuster (Zero Overlap with Input Bar)
   useEffect(() => {
@@ -1182,6 +1300,17 @@ export default function StudentChatModal({
           })
         );
         playChime("heart");
+      } else {
+        playChime("heart");
+        api.reactChatMessage(currentRoomRef.current?.id || currentRoom.id, msg.id, emoji)
+          .then((res) => {
+            if (res && res.success && res.reactions) {
+              setMessages((prev) =>
+                prev.map((m) => (m.id === msg.id ? { ...m, reactions: res.reactions } : m))
+              );
+            }
+          })
+          .catch(() => {});
       }
       setActiveMessageActionId(null);
     } else {
@@ -1338,6 +1467,16 @@ export default function StudentChatModal({
           emoji: "❤️",
         })
       );
+    } else {
+      api.reactChatMessage(currentRoomRef.current?.id || currentRoom.id, msg.id, "❤️")
+        .then((res) => {
+          if (res && res.success && res.reactions) {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === msg.id ? { ...m, reactions: res.reactions } : m))
+            );
+          }
+        })
+        .catch(() => {});
     }
     setTimeout(() => {
       setFloatingHeartMsgId((prev) => (prev === msg.id ? null : prev));
@@ -1366,23 +1505,38 @@ export default function StudentChatModal({
     }
   };
 
-  // Save Message Edit
+  // Save Message Edit (WS Primary + REST Fallback)
   const handleSaveEdit = (messageId) => {
-    if (!editText.trim()) return;
+    const cleanNewText = editText.trim();
+    if (!cleanNewText) return;
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(
         JSON.stringify({
           type: "edit_message",
           messageId,
-          newText: editText.trim(),
+          newText: cleanNewText,
         })
       );
+    } else {
+      api.editChatMessage(currentRoomRef.current?.id || currentRoom.id, messageId, cleanNewText)
+        .then((res) => {
+          if (res && res.success) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === messageId
+                  ? { ...m, text: res.newText || cleanNewText, isEdited: true, editedAt: res.editedAt || new Date().toISOString() }
+                  : m
+              )
+            );
+          }
+        })
+        .catch((err) => alert(err.message || "Could not edit message."));
     }
     setEditingMessageId(null);
     setEditText("");
   };
 
-  // Delete Message (Single)
+  // Delete Message (Single — WS Primary + REST Fallback)
   const handleDeleteMessage = (messageId) => {
     if (!window.confirm("Delete this message?")) return;
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -1392,6 +1546,20 @@ export default function StudentChatModal({
           messageId,
         })
       );
+    } else {
+      api.deleteChatMessage(currentRoomRef.current?.id || currentRoom.id, messageId)
+        .then((res) => {
+          if (res && res.success) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === messageId
+                  ? { ...m, isDeleted: true, text: res.text || "🗑️ This message was deleted", fileUrl: null }
+                  : m
+              )
+            );
+          }
+        })
+        .catch((err) => alert(err.message || "Could not delete message."));
     }
   };
 

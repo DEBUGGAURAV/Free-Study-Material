@@ -1656,6 +1656,20 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  editChatMessage: (roomId, messageId, newText) =>
+    request(`/chat/messages/${encodeURIComponent(messageId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ roomId, newText }),
+    }),
+  deleteChatMessage: (roomId, messageId) =>
+    request(`/chat/messages/${encodeURIComponent(messageId)}?roomId=${encodeURIComponent(roomId || "public")}`, {
+      method: "DELETE",
+    }),
+  reactChatMessage: (roomId, messageId, emoji) =>
+    request(`/chat/messages/${encodeURIComponent(messageId)}/react`, {
+      method: "POST",
+      body: JSON.stringify({ roomId, emoji }),
+    }),
   uploadChatMedia: async (file) => {
     const formData = new FormData();
     formData.append("file", file);

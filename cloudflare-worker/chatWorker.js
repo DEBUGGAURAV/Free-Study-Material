@@ -56,7 +56,7 @@ function getClusterOrigins(env) {
   const raw = [
     e.ORIGIN_URL || "https://freestudymaterial1.onrender.com",
     e.BACKUP_ORIGIN_URL_1 || "https://freestudymaterial2.onrender.com",
-    e.BACKUP_ORIGIN_URL_2 || "https://freestudymaterial.onrender.com",
+    e.BACKUP_ORIGIN_URL_2 || "",
   ];
   const unique = [];
   for (const item of raw) {
@@ -123,44 +123,35 @@ export default {
         );
       }
 
-      const pair = new WebSocketPair();
-      const [clientWs, serverWs] = Object.values(pair);
-
-      serverWs.accept();
-
-      serverWs.addEventListener("message", async (event) => {
+      // Proxy authenticated WebSocket upgrade directly to the healthy Render chat broker
+      const wsOrigins = getClusterOrigins(env);
+      for (let i = 0; i < wsOrigins.length; i++) {
+        const originTarget = wsOrigins[i];
         try {
-          const payloadSize =
-            typeof event.data === "string"
-              ? event.data.length
-              : event.data?.byteLength || 0;
-          if (payloadSize > 65536) {
-            serverWs.send(JSON.stringify({ type: "ERROR", message: "Message payload too large" }));
-            return;
+          const forwardUrl = originTarget + url.pathname + url.search;
+          const wsHeaders = new Headers(request.headers);
+          wsHeaders.delete("host");
+          wsHeaders.set("X-Forwarded-Host", url.host);
+          const upstreamRes = await fetch(new Request(forwardUrl, { method: request.method, headers: wsHeaders }));
+          if (upstreamRes.status === 101 || upstreamRes.webSocket) {
+            failedOrigins.delete(originTarget);
+            return upstreamRes;
           }
-          JSON.parse(event.data);
-          serverWs.send(
-            JSON.stringify({
-              type: "EDGE_ACK",
-              edgeTimestamp: Date.now(),
-              received: true,
-              colo: request.cf?.colo || "Global",
-            })
-          );
+          if (upstreamRes.status >= 500 && i < wsOrigins.length - 1) {
+            failedOrigins.set(originTarget, Date.now());
+            continue;
+          }
+          return upstreamRes;
         } catch (_) {
-          serverWs.send(JSON.stringify({ type: "PONG" }));
+          failedOrigins.set(originTarget, Date.now());
+          if (i < wsOrigins.length - 1) continue;
         }
-      });
-
-      serverWs.addEventListener("close", () => {
-        try {
-          serverWs.close();
-        } catch (_) {}
-      });
-
-      return new Response(null, {
-        status: 101,
-        webSocket: clientWs,
+      }
+      const wsFailHeaders = new Headers({ "Content-Type": "application/json", "Cache-Control": "no-store" });
+      applyCors(wsFailHeaders, request);
+      return new Response(JSON.stringify({ success: false, message: "Chat WebSocket backend temporarily unavailable" }), {
+        status: 503,
+        headers: wsFailHeaders,
       });
     }
 

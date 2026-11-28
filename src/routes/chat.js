@@ -238,6 +238,29 @@ roomSockets.set(PUBLIC_ROOM_ID, new Map());
   }
 })();
 
+async function hydrateRoomMessagesIfEmpty(roomId) {
+  if (!roomId || !db) return activeMessages.get(roomId) || [];
+  const existing = activeMessages.get(roomId);
+  if (Array.isArray(existing) && existing.length > 0) return existing;
+  try {
+    const snap = await db
+      .collection("chat_messages")
+      .where("roomId", "==", roomId)
+      .limit(100)
+      .get();
+    if (snap && !snap.empty) {
+      const msgs = [];
+      snap.forEach((doc) => msgs.push({ id: doc.id, ...doc.data() }));
+      msgs.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+      activeMessages.set(roomId, msgs);
+      return msgs;
+    }
+  } catch (err) {
+    console.debug(`[CHAT] Room messages hydrate notice (${roomId}):`, err.message);
+  }
+  return activeMessages.get(roomId) || [];
+}
+
 /**
  * 🔄 Retrieves a room from memory, or restores it from Firestore if not in memory (resilience against cold starts)
  */
@@ -261,6 +284,7 @@ async function getOrRestoreRoom(roomId) {
         activeRooms.set(roomId, room);
         if (!activeMessages.has(roomId)) activeMessages.set(roomId, []);
         if (!roomSockets.has(roomId)) roomSockets.set(roomId, new Map());
+        await hydrateRoomMessagesIfEmpty(roomId);
       }
     } catch (e) {
       console.warn(`[CHAT] Error restoring room ${roomId}:`, e.message);
@@ -1327,10 +1351,16 @@ function initChatWebSocket(server) {
     });
 
     ws.on("message", async (rawMsg) => {
+      ws.isAlive = true;
       ws.lastInteraction = Date.now();
       try {
         const data = JSON.parse(rawMsg.toString());
         const { type } = data;
+
+        if (type === "ping") {
+          try { ws.send(JSON.stringify({ type: "pong", ts: Date.now() })); } catch (_) {}
+          return;
+        }
 
         // 1. JOIN ROOM
         if (type === "join_room") {
@@ -3351,8 +3381,133 @@ router.get("/messages/:roomId", authenticateToken, requireAuth, async (req, res)
         return res.status(403).json({ success: false, message: "Access denied. You are not a member of this private pod." });
       }
     }
-    const msgs = activeMessages.get(roomId) || [];
+    const msgs = await hydrateRoomMessagesIfEmpty(roomId);
     return res.json({ success: true, messages: msgs });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * PATCH /api/chat/messages/:messageId
+ * Resilient REST edit endpoint (mirrors WebSocket edit_message)
+ */
+router.patch("/messages/:messageId", authenticateToken, requireAuth, async (req, res) => {
+  try {
+    const user = req.user;
+    const { messageId } = req.params;
+    const roomId = (req.body?.roomId || PUBLIC_ROOM_ID).trim();
+    const newText = typeof req.body?.newText === "string" ? req.body.newText.slice(0, 5000) : "";
+    const sanitizedNewText = newText.replace(/</g, "&lt;").replace(/>/g, "&gt;").trim();
+    if (!sanitizedNewText) return res.status(400).json({ success: false, message: "Message text cannot be empty." });
+
+    const msgs = await hydrateRoomMessagesIfEmpty(roomId);
+    const msg = msgs.find((m) => m.id === messageId);
+    if (!msg) return res.status(404).json({ success: false, message: "Message not found." });
+    if (msg.sender?.id !== user.id && !isUserAdmin(user)) {
+      return res.status(403).json({ success: false, message: "Cannot edit another user's message." });
+    }
+
+    msg.text = sanitizedNewText;
+    msg.isEdited = true;
+    msg.editedAt = new Date().toISOString();
+
+    broadcastToRoom(roomId, {
+      type: "message_edited",
+      messageId,
+      newText: msg.text,
+      editedAt: msg.editedAt,
+    });
+    if (db) {
+      db.collection("chat_messages").doc(messageId).update({
+        text: msg.text,
+        isEdited: true,
+        editedAt: msg.editedAt,
+      }).catch(() => {});
+    }
+    return res.json({ success: true, messageId, newText: msg.text, editedAt: msg.editedAt });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * DELETE /api/chat/messages/:messageId
+ * Resilient REST delete endpoint (mirrors WebSocket delete_message)
+ */
+router.delete("/messages/:messageId", authenticateToken, requireAuth, async (req, res) => {
+  try {
+    const user = req.user;
+    const { messageId } = req.params;
+    const roomId = String(req.query.roomId || req.body?.roomId || PUBLIC_ROOM_ID).trim();
+    const msgs = await hydrateRoomMessagesIfEmpty(roomId);
+    const msg = msgs.find((m) => m.id === messageId);
+    if (!msg) return res.status(404).json({ success: false, message: "Message not found." });
+    if (msg.sender?.id !== user.id && !isUserAdmin(user)) {
+      return res.status(403).json({ success: false, message: "Cannot delete another user's message." });
+    }
+
+    msg.isDeleted = true;
+    msg.text = "🗑️ This message was deleted";
+    msg.fileUrl = null;
+
+    broadcastToRoom(roomId, {
+      type: "message_deleted",
+      messageId,
+      text: msg.text,
+    });
+    if (db) {
+      db.collection("chat_messages").doc(messageId).update({
+        isDeleted: true,
+        text: msg.text,
+        fileUrl: null,
+      }).catch(() => {});
+    }
+    return res.json({ success: true, messageId, text: msg.text });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/chat/messages/:messageId/react
+ * Resilient REST reaction toggle (mirrors WebSocket react_message)
+ */
+router.post("/messages/:messageId/react", authenticateToken, requireAuth, async (req, res) => {
+  try {
+    const user = req.user;
+    const { messageId } = req.params;
+    const roomId = String(req.body?.roomId || PUBLIC_ROOM_ID).trim();
+    const emoji = String(req.body?.emoji || "").trim().slice(0, 16);
+    if (!emoji) return res.status(400).json({ success: false, message: "Emoji is required." });
+
+    const msgs = await hydrateRoomMessagesIfEmpty(roomId);
+    const msg = msgs.find((m) => m.id === messageId);
+    if (!msg) return res.status(404).json({ success: false, message: "Message not found." });
+
+    if (!msg.reactions || typeof msg.reactions !== "object") msg.reactions = {};
+    const list = Array.isArray(msg.reactions[emoji]) ? [...msg.reactions[emoji]] : [];
+    const idx = list.indexOf(user.id);
+    if (idx >= 0) {
+      list.splice(idx, 1);
+    } else {
+      list.push(user.id);
+    }
+    if (list.length > 0) {
+      msg.reactions[emoji] = list;
+    } else {
+      delete msg.reactions[emoji];
+    }
+
+    broadcastToRoom(roomId, {
+      type: "message_reaction",
+      messageId,
+      reactions: msg.reactions,
+    });
+    if (db) {
+      db.collection("chat_messages").doc(messageId).update({ reactions: msg.reactions }).catch(() => {});
+    }
+    return res.json({ success: true, messageId, reactions: msg.reactions });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
