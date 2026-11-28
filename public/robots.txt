@@ -11,3 +11,4 @@ Disallow: /api/security/
 Disallow: /api/help/admin/
 Disallow: /api/notes/*/stream
 Sitemap: https://freestudymaterial.pages.dev/sitemap.xml
+Sitemap: https://freestudymaterial.pages.dev/sitemap-static.xml

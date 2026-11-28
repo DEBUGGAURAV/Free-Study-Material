@@ -10,7 +10,7 @@ const BACKEND_ORIGINS = [
 ];
 
 export async function onRequest(context) {
-  const { request } = context;
+  const { request, env } = context;
   const method = (request.method || "GET").toUpperCase();
   if (method !== "GET" && method !== "HEAD") {
     return new Response("Method Not Allowed", { status: 405 });
@@ -24,6 +24,7 @@ export async function onRequest(context) {
     const headers = {
       "Content-Type": "application/xml; charset=utf-8",
       "Cache-Control": cacheControl,
+      "Last-Modified": new Date().toUTCString(),
       "X-Content-Type-Options": "nosniff",
     };
     return new Response(method === "HEAD" ? null : xml, { status: 200, headers });
@@ -40,10 +41,10 @@ export async function onRequest(context) {
     } catch (_) {}
   }
 
-  // Race all healthy backend nodes in parallel with a tight 4.5s timeout so Googlebot never times out!
+  // Race all healthy backend nodes in parallel (6.5s ceiling handles US Googlebot PoP -> Render round-trip)
   const fetchOriginSitemap = async (origin) => {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4500);
+    const timer = setTimeout(() => controller.abort(), 6500);
     try {
       const res = await fetch(`${origin}/sitemap.xml`, {
         method: "GET",
@@ -70,6 +71,7 @@ export async function onRequest(context) {
       headers: {
         "Content-Type": "application/xml; charset=utf-8",
         "Cache-Control": "public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400",
+        "Last-Modified": new Date().toUTCString(),
         "X-Content-Type-Options": "nosniff",
       },
     });
@@ -82,7 +84,20 @@ export async function onRequest(context) {
       : cacheableRes;
   } catch (_) {}
 
-  // Fallback minimal sitemap if all Render nodes are waking up
+  // Zero-Latency Static Snapshot Fallback (all 128+ URLs straight from Cloudflare Pages CDN Assets)
+  if (env && env.ASSETS) {
+    try {
+      const staticRes = await env.ASSETS.fetch(new Request(`${url.origin}/sitemap-static.xml`, { method: "GET" }));
+      if (staticRes && staticRes.ok) {
+        const staticXml = (await staticRes.text()).trim();
+        if (staticXml.includes("<urlset")) {
+          return buildXmlResponse(staticXml, "public, max-age=600, s-maxage=600");
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Final emergency minimal sitemap
   const today = new Date().toISOString().split("T")[0];
   const fallbackXml = [
     '<?xml version="1.0" encoding="UTF-8"?>',
