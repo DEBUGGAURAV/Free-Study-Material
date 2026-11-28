@@ -60,7 +60,12 @@ const formatDateSeparator = (dateStr) => {
 };
 
 // Popular Emojis for quick reactions and picker
-const POPULAR_EMOJIS = ["❤️", "😂", "🔥", "👍", "📚", "💡", "🚀", "🎓", "✨", "💯", "👏", "🎯", "⚡", "🙏", "🧠", "📖"];
+const POPULAR_EMOJIS = [
+  "❤️", "😂", "🔥", "👍", "😍", "😊", "🙌", "👏",
+  "📚", "💡", "🚀", "🎓", "✨", "💯", "🎯", "⚡",
+  "🙏", "🧠", "📖", "📝", "💻", "🎉", "😎", "🤝",
+  "🤔", "😅", "😭", "🥳", "👌", "💪", "✅", "📌"
+];
 
 // 🎵 Synthesize Web Audio API sound effects (Shared singleton, 0ms latency)
 const playChime = playChatSound;
@@ -4229,37 +4234,43 @@ export default function StudentChatModal({
             {/* QUICK EMOJI PICKER DRAWER */}
             {showEmojiPicker && (
               <div
+                onClick={(e) => e.stopPropagation()}
                 style={{
-                  padding: "10px 16px",
-                  background: "rgba(15, 23, 42, 0.98)",
-                  borderTop: "1px solid rgba(255, 255, 255, 0.1)",
+                  padding: "10px 14px",
+                  background: "#ffffff",
+                  borderTop: "1px solid #e2e8f0",
                   display: "flex",
+                  flexWrap: "wrap",
                   alignItems: "center",
-                  gap: "10px",
-                  overflowX: "auto",
-                  scrollbarWidth: "none",
+                  gap: "6px",
+                  maxHeight: "152px",
+                  overflowY: "auto",
                   WebkitOverflowScrolling: "touch",
-                  boxShadow: "0 -8px 24px rgba(0,0,0,0.3)",
+                  boxShadow: "0 -8px 24px rgba(15, 23, 42, 0.08)",
+                  zIndex: 25,
                 }}
               >
                 {POPULAR_EMOJIS.map((emoji) => (
                   <button
                     key={emoji}
                     type="button"
-                    onClick={() => handleQuickReaction(emoji)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleQuickReaction(emoji);
+                    }}
                     style={{
-                      background: "rgba(255, 255, 255, 0.05)",
-                      border: "none",
-                      borderRadius: "8px",
-                      width: "36px",
-                      height: "36px",
-                      fontSize: "1.2rem",
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "10px",
+                      width: "38px",
+                      height: "38px",
+                      fontSize: "1.25rem",
                       cursor: "pointer",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       flexShrink: 0,
-                      transition: "transform 0.15s ease",
+                      transition: "transform 0.12s ease, background 0.12s ease",
                     }}
                   >
                     {emoji}
@@ -4624,7 +4635,10 @@ export default function StudentChatModal({
                     {/* Emoji Drawer Toggle */}
                     <button
                       type="button"
-                      onClick={() => setShowEmojiPicker((prev) => !prev)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowEmojiPicker((prev) => !prev);
+                      }}
                       disabled={isBlocked}
                       style={{
                         background: "none",
