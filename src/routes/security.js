@@ -12,7 +12,7 @@
 const express = require("express");
 const router = express.Router();
 const jwt = require("jsonwebtoken");
-const { JWT_SECRET, authenticateToken, requireAdmin } = require("../middleware/auth");
+const { JWT_SECRET, authenticateToken, requireAdmin, setRevokedTokenVersion } = require("../middleware/auth");
 const { apiLimiter = (req, res, next) => next() } = require("../middleware/rateLimit");
 const { db } = require("../firebase");
 const { tursoClient } = require("../services/tursoService");
@@ -321,7 +321,10 @@ router.post("/tamper-alert", apiLimiter, async (req, res) => {
         }
       }
 
-      // B. Permanent Block in Turso Database (ONLY for verified authenticated users)
+      // B. Permanent Block in Turso Database & Instant Active JWT Revocation (ONLY for verified authenticated users)
+      if (userId && userId !== "admin-root" && typeof setRevokedTokenVersion === "function") {
+        setRevokedTokenVersion(userId, Date.now());
+      }
       if (tursoClient && authUser && authUser.email && authUser.email !== "N/A") {
         try {
           await tursoClient.execute({
@@ -490,14 +493,16 @@ router.post("/jail-appeal", apiLimiter, async (req, res) => {
       .filter(Boolean)
       .join("\n");
 
+    // Keep callback_data strictly <= 64 bytes (Telegram Bot API hard limit; IPv6/deviceId resolved server-side by incidentId)
+    const shortIncId = safeIncId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32);
     const replyMarkup = {
       inline_keyboard: [
         [
-          { text: "📱 Pardon Device Only", callback_data: `appeal:pardon_dev:${safeIncId}:${effectiveDevId || "none"}` },
-          { text: "🌐 Pardon Entire IP", callback_data: `appeal:pardon_ip:${safeIncId}:${clientIp}` },
+          { text: "📱 Pardon Device Only", callback_data: `appeal:pardon_dev:${shortIncId}` },
+          { text: "🌐 Pardon Entire IP", callback_data: `appeal:pardon_ip:${shortIncId}` },
         ],
         [
-          { text: "❌ Reject Appeal", callback_data: `appeal:deny:${safeIncId}` },
+          { text: "❌ Reject Appeal", callback_data: `appeal:deny:${shortIncId}` },
         ]
       ],
     };

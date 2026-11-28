@@ -380,7 +380,7 @@ export default function TabWebSecurity(props) {
   const isElevated = threatLevel.includes("DEFCON 2") || threatLevel.includes("DEFCON 4");
 
   return (
-    <div style={{ color: "#0f172a", fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
+    <div style={{ color: "#e2e8f0", fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
       {/* Toast Notification */}
       {toastMsg && (
         <div style={{
@@ -527,7 +527,7 @@ export default function TabWebSecurity(props) {
             </span>
             <Ban size={16} color="#f87171" />
           </div>
-          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: totalQuarantineCount > 0 ? "#dc2626" : "#0f172a", marginTop: "4px" }}>
+          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: totalQuarantineCount > 0 ? "#f87171" : "#f8fafc", marginTop: "4px" }}>
             {totalQuarantineCount}
           </div>
           <div style={{ fontSize: "0.72rem", color: "var(--text-dim, #94a3b8)", marginTop: "2px" }}>
@@ -544,12 +544,12 @@ export default function TabWebSecurity(props) {
           boxShadow: pendingAppealsCount > 0 ? "0 0 15px rgba(56, 189, 248, 0.2)" : "none",
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "0.72rem", color: "#0284c7", fontWeight: 700, textTransform: "uppercase" }}>
+            <span style={{ fontSize: "0.72rem", color: "#38bdf8", fontWeight: 700, textTransform: "uppercase" }}>
               Appeals Desk (Topic 750)
             </span>
-            <MessageSquare size={16} color="#0284c7" />
+            <MessageSquare size={16} color="#38bdf8" />
           </div>
-          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: pendingAppealsCount > 0 ? "#0284c7" : "#0f172a", marginTop: "4px" }}>
+          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: pendingAppealsCount > 0 ? "#38bdf8" : "#f8fafc", marginTop: "4px" }}>
             {pendingAppealsCount} Pending
           </div>
           <div style={{ fontSize: "0.72rem", color: "var(--text-dim, #94a3b8)", marginTop: "2px" }}>
@@ -566,12 +566,12 @@ export default function TabWebSecurity(props) {
           boxShadow: blockedUsers.length > 0 ? "0 0 15px rgba(239, 68, 68, 0.25)" : "none",
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "0.72rem", color: "#dc2626", fontWeight: 700, textTransform: "uppercase" }}>
+            <span style={{ fontSize: "0.72rem", color: "#f87171", fontWeight: 700, textTransform: "uppercase" }}>
               Blocked Accounts (Security Bans)
             </span>
-            <Ban size={16} color="#dc2626" />
+            <Ban size={16} color="#f87171" />
           </div>
-          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: blockedUsers.length > 0 ? "#dc2626" : "#0f172a", marginTop: "4px" }}>
+          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: blockedUsers.length > 0 ? "#f87171" : "#f8fafc", marginTop: "4px" }}>
             {blockedUsers.length}
           </div>
           <div style={{ fontSize: "0.72rem", color: "var(--text-dim, #94a3b8)", marginTop: "2px" }}>
@@ -587,12 +587,12 @@ export default function TabWebSecurity(props) {
           padding: "14px 16px",
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "0.72rem", color: "#b45309", fontWeight: 700, textTransform: "uppercase" }}>
+            <span style={{ fontSize: "0.72rem", color: "#fbbf24", fontWeight: 700, textTransform: "uppercase" }}>
               Locked Accounts (Brute Force)
             </span>
-            <Lock size={16} color="#b45309" />
+            <Lock size={16} color="#fbbf24" />
           </div>
-          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: lockedAccounts.length > 0 ? "#b45309" : "#0f172a", marginTop: "4px" }}>
+          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: lockedAccounts.length > 0 ? "#fbbf24" : "#f8fafc", marginTop: "4px" }}>
             {lockedAccounts.length}
           </div>
           <div style={{ fontSize: "0.72rem", color: "var(--text-dim, #94a3b8)", marginTop: "2px" }}>
@@ -788,16 +788,16 @@ export default function TabWebSecurity(props) {
                         </div>
                       </td>
                       <td style={{ padding: "10px 12px", verticalAlign: "top" }}>
-                        <div style={{ fontWeight: 800, color: "#0f172a" }}>{a.name || "Student Visitor"}</div>
-                        <div style={{ color: "#0284c7", fontSize: "0.72rem", fontWeight: 600 }}>{a.email || "No email"}</div>
+                        <div style={{ fontWeight: 800, color: "#f8fafc" }}>{a.name || "Student Visitor"}</div>
+                        <div style={{ color: "#38bdf8", fontSize: "0.72rem", fontWeight: 600 }}>{a.email || "No email"}</div>
                         {a.mobile && a.mobile !== "N/A" && (
                           <div style={{ color: "#94a3b8", fontSize: "0.7rem" }}>📱 {a.mobile}</div>
                         )}
-                        <div style={{ fontSize: "0.68rem", color: "#64748b", fontFamily: "var(--font-mono, monospace)", marginTop: "2px" }}>
+                        <div style={{ fontSize: "0.68rem", color: "#94a3b8", fontFamily: "var(--font-mono, monospace)", marginTop: "2px" }}>
                           IP: {a.ip || "unknown"}
                         </div>
                       </td>
-                      <td style={{ padding: "10px 12px", color: "#334155", maxWidth: "260px", verticalAlign: "top" }}>
+                      <td style={{ padding: "10px 12px", color: "#cbd5e1", maxWidth: "260px", verticalAlign: "top" }}>
                         <div style={{ fontStyle: "italic", lineHeight: "1.4" }}>
                           "{a.message || a.reason || "Student requested connection pardon."}"
                         </div>
@@ -1459,7 +1459,7 @@ export default function TabWebSecurity(props) {
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#0f172a" }}>
+                <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#f8fafc" }}>
                   {s.icon || "🛡️"} {s.name}
                 </span>
                 <span style={{
@@ -1558,10 +1558,12 @@ export default function TabWebSecurity(props) {
 
           <div style={{ background: "rgba(0, 0, 0, 0.25)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "8px", padding: "12px 14px" }}>
             <div style={{ fontSize: "0.7rem", color: "var(--text-dim, #94a3b8)", textTransform: "uppercase", fontWeight: 700 }}>Vulnerability Defcon</div>
-            <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--accent-cyan, #06b6d4)", marginTop: "4px" }}>
-              DEFCON 5
+            <div style={{ fontSize: "1.1rem", fontWeight: 800, color: isElevated ? "#f87171" : "var(--accent-cyan, #06b6d4)", marginTop: "4px" }}>
+              {threatLevel.split(" (")[0]}
             </div>
-            <div style={{ fontSize: "0.68rem", color: "var(--text-dim, #94a3b8)", marginTop: "2px" }}>Zero Vulnerabilities (All Clear)</div>
+            <div style={{ fontSize: "0.68rem", color: "var(--text-dim, #94a3b8)", marginTop: "2px" }}>
+              {totalQuarantineCount > 0 ? `${totalQuarantineCount} Active Quarantine(s)` : "Zero Vulnerabilities (All Clear)"}
+            </div>
           </div>
 
           <div style={{ background: "rgba(0, 0, 0, 0.25)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "8px", padding: "12px 14px" }}>
@@ -1606,8 +1608,8 @@ export default function TabWebSecurity(props) {
               {(props.securityScanReport.checks || []).map((check, cIdx) => (
                 <div key={check.id || cIdx} style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "6px", padding: "8px 10px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
-                    <span style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.76rem" }}>{check.name}</span>
-                    <span style={{ fontSize: "0.65rem", fontWeight: 800, padding: "1px 6px", borderRadius: "4px", background: "rgba(16, 185, 129, 0.2)", color: "#34d399" }}>
+                    <span style={{ fontWeight: 700, color: "#f8fafc", fontSize: "0.76rem" }}>{check.name}</span>
+                    <span style={{ fontSize: "0.65rem", fontWeight: 800, padding: "1px 6px", borderRadius: "4px", background: check.status === "WARN" ? "rgba(245, 158, 11, 0.2)" : "rgba(16, 185, 129, 0.2)", color: check.status === "WARN" ? "#fbbf24" : "#34d399" }}>
                       {check.status || "PASS"}
                     </span>
                   </div>
@@ -1654,7 +1656,7 @@ export default function TabWebSecurity(props) {
                         {inc.ip || "127.0.0.1"}
                       </td>
                       <td style={{ padding: "8px 12px", color: "#fbbf24" }}>
-                        {inc.action || "Payload scrubbed & request dropped"}
+                        {inc.actionTaken || inc.action || "Payload scrubbed & request dropped"}
                       </td>
                       <td style={{ padding: "8px 12px", textAlign: "right" }}>
                         <span style={{ padding: "2px 6px", borderRadius: "4px", background: "rgba(16, 185, 129, 0.15)", color: "#34d399", fontSize: "0.68rem", fontWeight: 700 }}>
@@ -1954,10 +1956,10 @@ export default function TabWebSecurity(props) {
                           {ev.severity || "HIGH"}
                         </span>
                       </td>
-                      <td style={{ padding: "7px 12px", fontFamily: "var(--font-mono, monospace)", color: "#334155" }}>
+                      <td style={{ padding: "7px 12px", fontFamily: "var(--font-mono, monospace)", color: "#38bdf8" }}>
                         {ev.ip || "Unknown"}
                       </td>
-                      <td style={{ padding: "7px 12px", color: "#0f172a" }}>
+                      <td style={{ padding: "7px 12px", color: "#e2e8f0" }}>
                         {ev.detail || ev.type}
                       </td>
                       <td style={{ padding: "7px 12px", color: "#34d399", fontWeight: 700 }}>

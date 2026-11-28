@@ -85,9 +85,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// 🛡️ Pillar 2: Automated IP Jail & Anti-DDoS Firewall
-app.use(ipJailFirewall);
-
 // Security & Header Protection with Production Content Security Policy (CSP)
 app.use(
   helmet({
@@ -260,6 +257,9 @@ app.use((req, res, next) => {
 });
 app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 app.use(cookieParser());
+
+// 🛡️ Pillar 2: Automated IP Jail & Anti-DDoS Firewall (runs AFTER CORS + CookieParser so 429s carry CORS headers & Dual-Key cookie deviceId is always read!)
+app.use(ipJailFirewall);
 
 // 🛡️ Pillar 2: Global Input Sanitizer & Prototype Pollution Guard
 app.use(globalSanitizer);

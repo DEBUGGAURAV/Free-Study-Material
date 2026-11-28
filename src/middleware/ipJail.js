@@ -9,16 +9,138 @@
  */
 
 const jwt = require("jsonwebtoken");
+const net = require("node:net");
 const { getClientIp } = require("./rateLimit");
 
 const jailedIps = new Map(); // ip -> unjailTimestamp
-const jailedIpsDetails = new Map(); // ip -> { ip, unjailTime, jailedAt, reason, requestCount, incidentId }
+const jailedIpsDetails = new Map(); // ip -> { ip, unjailTime, jailedAt, reason, requestCount, incidentId, durationLabel }
 const jailedDevices = new Map(); // deviceId -> unjailTimestamp
-const jailedDevicesDetails = new Map(); // deviceId -> { deviceId, unjailTime, jailedAt, reason, incidentId }
+const jailedDevicesDetails = new Map(); // deviceId -> { deviceId, unjailTime, jailedAt, reason, incidentId, ip, durationLabel }
 const incidentsRegistry = new Map(); // incidentId -> { incidentId, ip, deviceId, unjailTime, reason }
 const pardonedIncidents = new Set(); // incidentId -> Set of explicitly pardoned incident IDs
-const ipRequestHistory = new Map(); // ip -> Array of timestamps
+const ipRequestHistory = new Map(); // ip -> Array of timestamps (general request flood window)
+const ipAuthFailureHistory = new Map(); // ip -> Array of timestamps (dedicated auth failure window)
 const knownAdminIps = new Map(); // ip -> expiryMs (30-day sliding immunity window for active admins)
+
+function formatDurationLabel(durationMs) {
+  const mins = Math.max(1, Math.round((Number(durationMs) || 0) / 60000));
+  if (mins >= 500000) return "Permanent (Admin Review)";
+  if (mins >= 1440) {
+    const days = Math.round(mins / 1440);
+    return `${days} ${days === 1 ? "Day" : "Days"}`;
+  }
+  if (mins >= 60) {
+    const hrs = Math.round(mins / 60);
+    return `${hrs} ${hrs === 1 ? "Hour" : "Hours"}`;
+  }
+  return `${mins} ${mins === 1 ? "Minute" : "Minutes"}`;
+}
+
+function extractDeviceIdFromReq(req) {
+  if (!req) return "";
+  const fromHeader = req.headers?.["x-device-id"] || "";
+  if (fromHeader) return sanitizeDeviceId(fromHeader);
+  if (req.cookies?.fsm_device_id) return sanitizeDeviceId(req.cookies.fsm_device_id);
+  const rawCookie = req.headers?.cookie || "";
+  if (rawCookie) {
+    const m = rawCookie.match(/(?:^|;\s*)fsm_device_id=([^;]+)/);
+    if (m && m[1]) {
+      try {
+        return sanitizeDeviceId(decodeURIComponent(m[1]));
+      } catch (_) {
+        return sanitizeDeviceId(m[1]);
+      }
+    }
+  }
+  return "";
+}
+
+// 🌐 Multi-Node Distributed Sync (Turso 4): Keep IP & Device Jails identical across all Render nodes & restarts
+let lastTursoSyncMs = 0;
+async function syncActiveJailsFromTurso() {
+  try {
+    const { getActiveTursoJails } = require("../services/tursoStudentVaultService");
+    if (typeof getActiveTursoJails !== "function") return;
+    const rows = await getActiveTursoJails(500);
+    const now = Date.now();
+    const remoteIpKeys = new Set();
+    const remoteDevKeys = new Set();
+
+    for (const r of rows) {
+      if (!r || !r.target || !r.unjailTime || r.unjailTime <= now) continue;
+      if (r.incidentId && pardonedIncidents.has(r.incidentId)) continue;
+
+      if (r.jailType === "ip") {
+        if (knownAdminIps.has(r.target)) continue;
+        remoteIpKeys.add(r.target);
+        jailedIps.set(r.target, r.unjailTime);
+        jailedIpsDetails.set(r.target, {
+          ip: r.target,
+          unjailTime: r.unjailTime,
+          jailedAt: r.jailedAt || now,
+          reason: r.reason || "Security policy violation",
+          durationLabel: r.durationLabel || formatDurationLabel(r.unjailTime - (r.jailedAt || now)),
+          requestCount: 999,
+          incidentId: r.incidentId || `FSM-SEC-${Math.floor(100000 + Math.random() * 900000)}`,
+          deviceId: r.deviceId || "",
+        });
+        if (r.incidentId) {
+          incidentsRegistry.set(r.incidentId, {
+            incidentId: r.incidentId,
+            ip: r.target,
+            deviceId: r.deviceId || "",
+            unjailTime: r.unjailTime,
+            reason: r.reason || "Security policy violation",
+          });
+        }
+      } else if (r.jailType === "device") {
+        remoteDevKeys.add(r.target);
+        jailedDevices.set(r.target, r.unjailTime);
+        jailedDevicesDetails.set(r.target, {
+          deviceId: r.target,
+          unjailTime: r.unjailTime,
+          jailedAt: r.jailedAt || now,
+          reason: r.reason || "Security policy violation",
+          durationLabel: r.durationLabel || formatDurationLabel(r.unjailTime - (r.jailedAt || now)),
+          incidentId: r.incidentId || `FSM-SEC-${Math.floor(100000 + Math.random() * 900000)}`,
+          ip: r.ip || "",
+        });
+        if (r.incidentId) {
+          incidentsRegistry.set(r.incidentId, {
+            incidentId: r.incidentId,
+            deviceId: r.target,
+            ip: r.ip || "",
+            unjailTime: r.unjailTime,
+            reason: r.reason || "Security policy violation",
+          });
+        }
+      }
+    }
+
+    // Remove locally cached entries that were pardoned/unjailed on another cluster node
+    if (lastTursoSyncMs > 0) {
+      for (const [ip, det] of jailedIpsDetails.entries()) {
+        if (!remoteIpKeys.has(ip) && det?.jailedAt && (now - Number(det.jailedAt) > 15000)) {
+          if (det.incidentId) pardonedIncidents.add(det.incidentId);
+          jailedIps.delete(ip);
+          jailedIpsDetails.delete(ip);
+        }
+      }
+      for (const [devId, det] of jailedDevicesDetails.entries()) {
+        if (!remoteDevKeys.has(devId) && det?.jailedAt && (now - Number(det.jailedAt) > 15000)) {
+          if (det.incidentId) pardonedIncidents.add(det.incidentId);
+          jailedDevices.delete(devId);
+          jailedDevicesDetails.delete(devId);
+        }
+      }
+    }
+    lastTursoSyncMs = now;
+  } catch (_) {}
+}
+
+// Boot hydration + lightweight 20s multi-node consistency sync
+setTimeout(() => { syncActiveJailsFromTurso().catch(() => {}); }, 2500);
+setInterval(() => { syncActiveJailsFromTurso().catch(() => {}); }, 20 * 1000).unref?.();
 
 /**
  * Register an IP with absolute admin immunity
@@ -72,6 +194,15 @@ setInterval(async () => {
     if (valid.length === 0) ipRequestHistory.delete(ip);
     else ipRequestHistory.set(ip, valid);
   }
+  for (const [ip, times] of ipAuthFailureHistory.entries()) {
+    const valid = times.filter((t) => now - t < 10 * 60 * 1000);
+    if (valid.length === 0) ipAuthFailureHistory.delete(ip);
+    else ipAuthFailureHistory.set(ip, valid);
+  }
+  try {
+    const { pruneExpiredTursoActiveJails } = require("../services/tursoStudentVaultService");
+    if (typeof pruneExpiredTursoActiveJails === "function") pruneExpiredTursoActiveJails().catch(() => {});
+  } catch (_) {}
 
   // Delete from database & dispatch auto-release reports to Topic 750
   if (releasedIps.length > 0 || releasedDevices.length > 0) {
@@ -761,7 +892,7 @@ function ipJailFirewall(req, res, next) {
   }
 
   const now = Date.now();
-  const deviceId = sanitizeDeviceId(req.headers["x-device-id"] || req.cookies?.fsm_device_id || "");
+  const deviceId = extractDeviceIdFromReq(req);
 
   // 3. Dual-Key Check: IP Quarantine & Device Fingerprint Quarantine
   const isIpJailed = jailedIps.has(ip) && (now < jailedIps.get(ip));
@@ -775,16 +906,20 @@ function ipJailFirewall(req, res, next) {
     const incidentId = details.incidentId || `FSM-SEC-${Math.floor(100000 + Math.random() * 900000)}`;
 
     let policyName = "Administrative Security Detention";
-    let durationLabel = "Admin Chosen Duration";
+    let durationLabel = details.durationLabel || formatDurationLabel(unjailTime - (Number(details.jailedAt) || now));
     let autoReleasePolicy = "✅ Auto-release on expiration";
 
     if (reasonStr.includes("Traffic") || reasonStr.includes("DoS") || details.requestCount > 600) {
       policyName = "DDoS / Traffic Surge (>600 req/min)";
-      durationLabel = "3 Minutes";
+      durationLabel = details.durationLabel || "3 Minutes";
       autoReleasePolicy = "✅ Auto-release after 180s";
+    } else if (reasonStr.includes("Brute-Force")) {
+      policyName = "Credential Brute-Force Shield (20+ Failures)";
+      durationLabel = details.durationLabel || "5 Minutes";
+      autoReleasePolicy = "✅ Auto-release after 5m";
     } else if (reasonStr.includes("Tamper") || reasonStr.includes("Script") || reasonStr.includes("DevTools")) {
       policyName = "Client Script / DevTools Tamper (Strike 3)";
-      durationLabel = "24 Hours";
+      durationLabel = details.durationLabel || "24 Hours";
       autoReleasePolicy = "✅ Auto-release after 24h";
     }
 
@@ -862,6 +997,7 @@ function ipJailFirewall(req, res, next) {
       unjailTime: unjailAt,
       jailedAt: now,
       reason: `High Traffic Surge (${history.length} req/60s)`,
+      durationLabel: "3 Minutes",
       requestCount: history.length,
       incidentId,
     });
@@ -871,6 +1007,21 @@ function ipJailFirewall(req, res, next) {
       unjailTime: unjailAt,
       reason: `High Traffic Surge (${history.length} req/60s)`,
     });
+    try {
+      const { saveTursoActiveJail } = require("../services/tursoStudentVaultService");
+      if (typeof saveTursoActiveJail === "function") {
+        saveTursoActiveJail({
+          jailType: "ip",
+          target: ip,
+          incidentId,
+          ip,
+          reason: `High Traffic Surge (${history.length} req/60s)`,
+          durationLabel: "3 Minutes",
+          unjailTime: unjailAt,
+          jailedAt: now,
+        }).catch(() => {});
+      }
+    } catch (_) {}
     totalJailedCount++;
     recordThreatIncident({
       type: "DOS_TRAFFIC_SPIKE_DETENTION",
@@ -889,6 +1040,10 @@ function ipJailFirewall(req, res, next) {
       incidentId,
       message: "Excessive automated traffic surge detected. Your connection is paused for 3 minutes by Anti-DDoS Firewall.",
       retryAfter: 180,
+      unjailTime: unjailAt,
+      durationLabel: "3 Minutes",
+      policyName: "DDoS / Traffic Surge (>600 req/min)",
+      autoReleasePolicy: "✅ Auto-release after 180s",
     });
   }
 
@@ -897,15 +1052,17 @@ function ipJailFirewall(req, res, next) {
 
 /**
  * Report an explicit authentication failure to trigger fast-track detention
+ * Uses dedicated ipAuthFailureHistory Map so normal GET browsing NEVER triggers false brute-force lockouts!
  */
 function reportFailedAuth(req) {
   const ip = getClientIp(req);
   if (isWhitelistedIp(req, ip)) return;
 
   const now = Date.now();
-  let history = ipRequestHistory.get(ip) || [];
-  history.push(now);
-  ipRequestHistory.set(ip, history);
+  let failHistory = ipAuthFailureHistory.get(ip) || [];
+  failHistory = failHistory.filter((t) => now - t < 10 * 60 * 1000);
+  failHistory.push(now);
+  ipAuthFailureHistory.set(ip, failHistory);
 
   totalBruteForceBlocked++;
   recordThreatIncident({
@@ -916,18 +1073,43 @@ function reportFailedAuth(req) {
     actionTaken: "WEIGHTED_IP_ELEVATION",
   });
 
-  // 20 failed login attempts within 10 minutes triggers 5-minute quarantine
-  const recentAuthFails = history.filter((t) => now - t < 10 * 60 * 1000);
-  if (recentAuthFails.length >= 20) {
+  // 20 actual failed login/OTP attempts within 10 minutes triggers 5-minute quarantine
+  if (failHistory.length >= 20) {
     const unjailAt = now + 5 * 60 * 1000;
+    const incidentId = `FSM-SEC-${Math.floor(100000 + Math.random() * 900000)}`;
+    const reason = "Brute-Force Credential Attack Detected (20+ failed auth attempts)";
     jailedIps.set(ip, unjailAt);
     jailedIpsDetails.set(ip, {
       ip,
       unjailTime: unjailAt,
       jailedAt: now,
-      reason: "Brute-Force Credential Attack Detected (20+ failures)",
-      requestCount: recentAuthFails.length,
+      reason,
+      durationLabel: "5 Minutes",
+      requestCount: failHistory.length,
+      incidentId,
     });
+    incidentsRegistry.set(incidentId, {
+      incidentId,
+      ip,
+      unjailTime: unjailAt,
+      reason,
+    });
+    try {
+      const { saveTursoActiveJail } = require("../services/tursoStudentVaultService");
+      if (typeof saveTursoActiveJail === "function") {
+        saveTursoActiveJail({
+          jailType: "ip",
+          target: ip,
+          incidentId,
+          ip,
+          reason,
+          durationLabel: "5 Minutes",
+          unjailTime: unjailAt,
+          jailedAt: now,
+        }).catch(() => {});
+      }
+    } catch (_) {}
+    ipAuthFailureHistory.delete(ip);
     totalJailedCount++;
     recordThreatIncident({
       type: "BRUTE_FORCE_LOCKOUT",
@@ -936,7 +1118,7 @@ function reportFailedAuth(req) {
       severity: "CRITICAL",
       actionTaken: "5_MIN_IP_DETENTION",
     });
-    console.warn(`[SECURITY-FIREWALL] 🚨 Detained brute-force login IP ${ip} in security jail for 5 minutes.`);
+    console.warn(`[SECURITY-FIREWALL] 🚨 Detained brute-force login IP ${ip} in security jail for 5 minutes. Incident: ${incidentId}`);
   }
 }
 
@@ -1010,73 +1192,84 @@ function getThreatIntelligence() {
 }
 
 function unjailIp(ip) {
-  if (jailedIps.has(ip)) {
-    const details = jailedIpsDetails.get(ip);
-    if (details && details.incidentId) {
-      pardonedIncidents.add(details.incidentId);
+  const cleanIp = String(ip || "").trim();
+  if (!cleanIp) return false;
+  const details = jailedIpsDetails.get(cleanIp);
+  const hadLocal = jailedIps.has(cleanIp) || jailedIpsDetails.has(cleanIp);
+  if (details && details.incidentId) {
+    pardonedIncidents.add(details.incidentId);
+  }
+  jailedIps.delete(cleanIp);
+  jailedIpsDetails.delete(cleanIp);
+  ipAuthFailureHistory.delete(cleanIp);
+  try {
+    const { deleteTursoActiveJail } = require("../services/tursoStudentVaultService");
+    if (typeof deleteTursoActiveJail === "function") {
+      deleteTursoActiveJail({ jailType: "ip", target: cleanIp, incidentId: details?.incidentId }).catch(() => {});
     }
-    jailedIps.delete(ip);
-    jailedIpsDetails.delete(ip);
+  } catch (_) {}
+  if (hadLocal) {
     recordThreatIncident({
       type: "ADMIN_IP_PARDON",
-      ip,
+      ip: cleanIp,
       detail: "IP manually pardoned and released from security detention by Admin",
       severity: "LOW",
       actionTaken: "RELEASED_FROM_JAIL",
     });
-    return true;
   }
-  return false;
+  return hadLocal;
 }
 
 function unjailDevice(deviceId) {
-  if (deviceId && jailedDevices.has(deviceId)) {
-    const details = jailedDevicesDetails.get(deviceId);
-    if (details && details.incidentId) {
-      pardonedIncidents.add(details.incidentId);
+  const cleanDev = sanitizeDeviceId(deviceId);
+  if (!cleanDev) return false;
+  const details = jailedDevicesDetails.get(cleanDev);
+  const hadLocal = jailedDevices.has(cleanDev) || jailedDevicesDetails.has(cleanDev);
+  if (details && details.incidentId) {
+    pardonedIncidents.add(details.incidentId);
+  }
+  jailedDevices.delete(cleanDev);
+  jailedDevicesDetails.delete(cleanDev);
+  try {
+    const { deleteTursoActiveJail } = require("../services/tursoStudentVaultService");
+    if (typeof deleteTursoActiveJail === "function") {
+      deleteTursoActiveJail({ jailType: "device", target: cleanDev, incidentId: details?.incidentId }).catch(() => {});
     }
-    jailedDevices.delete(deviceId);
-    jailedDevicesDetails.delete(deviceId);
+  } catch (_) {}
+  if (hadLocal) {
     recordThreatIncident({
       type: "ADMIN_DEVICE_PARDON",
       ip: "DEVICE_FINGERPRINT",
-      detail: `Device ${deviceId.slice(0, 8)}... pardoned and released by Admin`,
+      detail: `Device ${cleanDev.slice(0, 8)}... pardoned and released by Admin`,
       severity: "LOW",
       actionTaken: "DEVICE_RELEASED",
     });
-    return true;
   }
-  return false;
+  return hadLocal;
 }
 
 function unjailByIncident(incidentId) {
   if (!incidentId) return false;
-  pardonedIncidents.add(incidentId);
-  let found = false;
-  const incident = incidentsRegistry.get(incidentId);
+  const cleanInc = String(incidentId).trim();
+  pardonedIncidents.add(cleanInc);
+  const incident = incidentsRegistry.get(cleanInc);
   if (incident) {
-    if (incident.ip) {
-      unjailIp(incident.ip);
-      found = true;
-    }
-    if (incident.deviceId) {
-      unjailDevice(incident.deviceId);
-      found = true;
-    }
-    incidentsRegistry.delete(incidentId);
+    if (incident.ip) unjailIp(incident.ip);
+    if (incident.deviceId) unjailDevice(incident.deviceId);
+    incidentsRegistry.delete(cleanInc);
   }
   for (const [ip, det] of jailedIpsDetails.entries()) {
-    if (det.incidentId === incidentId) {
-      unjailIp(ip);
-      found = true;
-    }
+    if (det.incidentId === cleanInc) unjailIp(ip);
   }
   for (const [devId, det] of jailedDevicesDetails.entries()) {
-    if (det.incidentId === incidentId) {
-      unjailDevice(devId);
-      found = true;
-    }
+    if (det.incidentId === cleanInc) unjailDevice(devId);
   }
+  try {
+    const { deleteTursoActiveJail } = require("../services/tursoStudentVaultService");
+    if (typeof deleteTursoActiveJail === "function") {
+      deleteTursoActiveJail({ incidentId: cleanInc }).catch(() => {});
+    }
+  } catch (_) {}
   return true;
 }
 
@@ -1147,6 +1340,11 @@ function clearAllJails() {
   jailedDevices.clear();
   jailedDevicesDetails.clear();
   incidentsRegistry.clear();
+  ipAuthFailureHistory.clear();
+  try {
+    const { clearAllTursoActiveJails } = require("../services/tursoStudentVaultService");
+    if (typeof clearAllTursoActiveJails === "function") clearAllTursoActiveJails().catch(() => {});
+  } catch (_) {}
   recordThreatIncident({
     type: "ADMIN_ALL_JAILS_PURGED",
     ip: "ADMIN_CONSOLE",
@@ -1158,49 +1356,72 @@ function clearAllJails() {
 }
 
 /**
- * Instantly put a specific IP in jail for security tampering violations
+ * Instantly put a specific IP in jail for security tampering or manual admin quarantine
  */
 function jailSpecificIp(ip, reason = "Client Script Tampering", durationMs = 24 * 60 * 60 * 1000, customIncidentId = null, deviceId = "") {
-  if (!ip || ip === "unknown") return null;
+  const cleanIp = String(ip || "").trim().replace(/^::ffff:/, "");
+  if (!cleanIp || cleanIp === "unknown" || !net.isIP(cleanIp)) return null;
 
   // 🛡️ Absolute Master Immunity: Never jail Administrator IPs
-  if (isWhitelistedIp(null, ip) || knownAdminIps.has(ip)) {
-    console.log(`[IP-JAIL] 🛡️ Immunity check: IP ${ip} belongs to Administrator or Whitelist. Skipping detention.`);
+  if (isWhitelistedIp(null, cleanIp) || knownAdminIps.has(cleanIp)) {
+    console.log(`[IP-JAIL] 🛡️ Immunity check: IP ${cleanIp} belongs to Administrator or Whitelist. Skipping detention.`);
     return null;
   }
 
-  const isLoopback = (ip === "127.0.0.1" || ip === "::1" || ip === "localhost");
-  const unjailTime = Date.now() + durationMs;
+  const isLoopback = (cleanIp === "127.0.0.1" || cleanIp === "::1" || cleanIp === "localhost");
+  const now = Date.now();
+  const safeDurationMs = Math.max(60 * 1000, Number(durationMs) || 24 * 60 * 60 * 1000);
+  const unjailTime = now + safeDurationMs;
+  const durationLabel = formatDurationLabel(safeDurationMs);
   const incidentId = customIncidentId || `FSM-SEC-${Math.floor(100000 + Math.random() * 900000)}`;
 
   if (!isLoopback) {
-    jailedIps.set(ip, unjailTime);
+    jailedIps.set(cleanIp, unjailTime);
   }
-  jailedIpsDetails.set(ip, {
-    ip,
+  jailedIpsDetails.set(cleanIp, {
+    ip: cleanIp,
     unjailTime,
-    jailedAt: new Date().toISOString(),
+    jailedAt: now,
     reason: isLoopback ? `${reason} (Localhost Test)` : reason,
+    durationLabel,
     requestCount: 999,
     incidentId,
     deviceId,
   });
   incidentsRegistry.set(incidentId, {
     incidentId,
-    ip,
+    ip: cleanIp,
     deviceId,
     unjailTime,
     reason,
   });
+  if (!isLoopback) {
+    try {
+      const { saveTursoActiveJail } = require("../services/tursoStudentVaultService");
+      if (typeof saveTursoActiveJail === "function") {
+        saveTursoActiveJail({
+          jailType: "ip",
+          target: cleanIp,
+          incidentId,
+          ip: cleanIp,
+          deviceId,
+          reason,
+          durationLabel,
+          unjailTime,
+          jailedAt: now,
+        }).catch(() => {});
+      }
+    } catch (_) {}
+  }
   totalJailedCount++;
   recordThreatIncident({
     type: "CLIENT_SCRIPT_TAMPERING",
-    ip,
+    ip: cleanIp,
     detail: reason,
     severity: "CRITICAL",
-    actionTaken: isLoopback ? "RECORDED_TEST" : "JAILED_24H",
+    actionTaken: isLoopback ? "RECORDED_TEST" : `JAILED_${durationLabel.toUpperCase().replace(/\s+/g, "_")}`,
   });
-  console.warn(`[IP-JAIL] 🚨 IP ${ip} jailed for 24h due to: ${reason}. Incident: ${incidentId}`);
+  console.warn(`[IP-JAIL] 🚨 IP ${cleanIp} jailed for ${durationLabel} due to: ${reason}. Incident: ${incidentId}`);
   return incidentId;
 }
 
@@ -1208,42 +1429,63 @@ function jailSpecificIp(ip, reason = "Client Script Tampering", durationMs = 24 
  * Instantly put a specific Device in jail (Dual-Key protection for shared college Wi-Fi)
  */
 function jailSpecificDevice(deviceId, reason = "Client Script Tampering", durationMs = 24 * 60 * 60 * 1000, customIncidentId = null, ip = "unknown") {
-  if (!deviceId) return null;
+  const cleanDev = sanitizeDeviceId(deviceId);
+  if (!cleanDev) return null;
 
   // 🛡️ Absolute Master Immunity: Never jail Device if associated with Administrator IP
   if (ip && ip !== "unknown" && (isWhitelistedIp(null, ip) || knownAdminIps.has(ip))) {
-    console.log(`[IP-JAIL] 🛡️ Immunity check: Device ${deviceId} associated with Administrator IP ${ip}. Skipping detention.`);
+    console.log(`[IP-JAIL] 🛡️ Immunity check: Device ${cleanDev} associated with Administrator IP ${ip}. Skipping detention.`);
     return null;
   }
 
-  const unjailTime = Date.now() + durationMs;
+  const now = Date.now();
+  const safeDurationMs = Math.max(60 * 1000, Number(durationMs) || 24 * 60 * 60 * 1000);
+  const unjailTime = now + safeDurationMs;
+  const durationLabel = formatDurationLabel(safeDurationMs);
   const incidentId = customIncidentId || `FSM-SEC-${Math.floor(100000 + Math.random() * 900000)}`;
 
-  jailedDevices.set(deviceId, unjailTime);
-  jailedDevicesDetails.set(deviceId, {
-    deviceId,
+  jailedDevices.set(cleanDev, unjailTime);
+  jailedDevicesDetails.set(cleanDev, {
+    deviceId: cleanDev,
     unjailTime,
-    jailedAt: new Date().toISOString(),
+    jailedAt: now,
     reason,
+    durationLabel,
     incidentId,
     ip,
   });
   incidentsRegistry.set(incidentId, {
     incidentId,
-    deviceId,
+    deviceId: cleanDev,
     ip,
     unjailTime,
     reason,
   });
+  try {
+    const { saveTursoActiveJail } = require("../services/tursoStudentVaultService");
+    if (typeof saveTursoActiveJail === "function") {
+      saveTursoActiveJail({
+        jailType: "device",
+        target: cleanDev,
+        incidentId,
+        ip,
+        deviceId: cleanDev,
+        reason,
+        durationLabel,
+        unjailTime,
+        jailedAt: now,
+      }).catch(() => {});
+    }
+  } catch (_) {}
   totalJailedCount++;
   recordThreatIncident({
     type: "DEVICE_FINGERPRINT_JAIL",
     ip,
-    detail: `Device ${deviceId.slice(0, 8)}... detained: ${reason}`,
+    detail: `Device ${cleanDev.slice(0, 8)}... detained: ${reason}`,
     severity: "CRITICAL",
-    actionTaken: "JAILED_DEVICE_24H",
+    actionTaken: `JAILED_DEVICE_${durationLabel.toUpperCase().replace(/\s+/g, "_")}`,
   });
-  console.warn(`[IP-JAIL] 🚨 Device ${deviceId} jailed for 24h due to: ${reason}. Incident: ${incidentId}`);
+  console.warn(`[IP-JAIL] 🚨 Device ${cleanDev} jailed for ${durationLabel} due to: ${reason}. Incident: ${incidentId}`);
   return incidentId;
 }
 
@@ -1267,5 +1509,6 @@ module.exports = {
   incidentsRegistry,
   registerAdminIp,
   isWhitelistedIp,
+  syncActiveJailsFromTurso,
 };
 

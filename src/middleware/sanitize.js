@@ -11,12 +11,15 @@
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 // 🛡️ ReDoS-immune linear time script stripper
 const SCRIPT_REGEX = /<script[\s\S]*?<\/script>/gi;
-// 🛡️ Broad handler & script scrubber (covers all on* event attributes, javascript:, vbscript:, data:text/html)
-const INLINE_JS_REGEX = /(javascript:|vbscript:|data:text\/html|on[a-z]{3,15}\s*=|eval\s*\(|expression\s*\()/gi;
+// 🛡️ Word-boundary DOM event handler & dangerous URI scrubber (0 false positives on normal words like content=, config=, constant=, online=)
+const INLINE_JS_REGEX = /(?:javascript:|vbscript:|data:text\/html|\bon(?:abort|blur|change|click|contextmenu|dblclick|drag|dragend|dragenter|dragleave|dragover|dragstart|drop|error|focus|focusin|focusout|input|invalid|keydown|keypress|keyup|load|mousedown|mouseenter|mouseleave|mousemove|mouseout|mouseover|mouseup|paste|pointerdown|pointerup|reset|resize|scroll|select|submit|toggle|touchstart|touchend|unload|wheel|animationstart|transitionend)\s*=|\beval\s*\(|\bexpression\s*\()/gi;
 
 let threatReporter = null;
+let extractRealIp = null;
 try {
-  threatReporter = require("./ipJail").incrementScrubbedCount;
+  const ipJailMod = require("./ipJail");
+  threatReporter = ipJailMod.incrementScrubbedCount;
+  extractRealIp = ipJailMod.getClientIp;
 } catch (_) {}
 
 function isDangerousKey(key) {
@@ -75,7 +78,7 @@ function scrubValue(val, clientIp = "unknown", depth = 0) {
 
 function globalSanitizer(req, res, next) {
   try {
-    const clientIp = req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip || "unknown";
+    const clientIp = typeof extractRealIp === "function" ? extractRealIp(req) : (req.ip || "unknown");
     if (req.body && typeof req.body === "object") {
       req.body = scrubValue(req.body, clientIp);
     }

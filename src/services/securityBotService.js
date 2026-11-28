@@ -904,38 +904,97 @@ async function startSecurityBotPoller() {
           const targetMsgId = msgObj?.message_id;
 
           if (dataStr.startsWith("appeal:")) {
+            // 🛡️ Verify clicking Telegram user is an authorized Administrator (prevents regular group members from pardoning attackers)
+            let isAuthorizedTgAdmin = false;
+            const callerTgId = String(fromUser?.id || "");
+            const envAdmins = `${process.env.TELEGRAM_ADMIN_IDS || ""},${process.env.TELEGRAM_OWNER_ID || ""},${process.env.ADMIN_TELEGRAM_ID || ""}`
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean);
+            if (callerTgId && envAdmins.includes(callerTgId)) {
+              isAuthorizedTgAdmin = true;
+            } else if (targetChatId && callerTgId && botToken) {
+              try {
+                const memRes = await fetch(
+                  `https://api.telegram.org/bot${botToken}/getChatMember?chat_id=${encodeURIComponent(targetChatId)}&user_id=${encodeURIComponent(callerTgId)}`
+                );
+                if (memRes.ok) {
+                  const memData = await memRes.json();
+                  const st = memData?.result?.status;
+                  if (st === "creator" || st === "administrator") {
+                    isAuthorizedTgAdmin = true;
+                  }
+                }
+              } catch (_) {}
+            }
+            if (!isAuthorizedTgAdmin) {
+              try {
+                await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    callback_query_id: cqId,
+                    text: "⛔ Only verified Administrators can execute Security Jail pardons.",
+                    show_alert: true,
+                  }),
+                });
+              } catch (_) {}
+              continue;
+            }
+
             const parts = dataStr.split(":");
             const action = parts[1];
             const incidentId = parts[2];
-            const targetVal = parts[3];
+            // Preserve full IPv6 addresses containing colons in legacy callback buttons, or look up by incidentId
+            let targetVal = parts.slice(3).join(":");
 
-            const { unjailDevice, unjailIp, unjailByIncident } = require("../middleware/ipJail");
+            const { unjailDevice, unjailIp, unjailByIncident, incidentsRegistry } = require("../middleware/ipJail");
+            let appealRecord = null;
+            if ((!targetVal || targetVal === "none") && incidentId) {
+              const regEntry = incidentsRegistry?.get(incidentId);
+              if (regEntry) {
+                appealRecord = { ip: regEntry.ip || "", deviceId: regEntry.deviceId || "" };
+              }
+              if (!appealRecord || (!appealRecord.ip && !appealRecord.deviceId)) {
+                try {
+                  const { getTursoJailAppealByIncident } = require("./tursoStudentVaultService");
+                  const tursoRec = await getTursoJailAppealByIncident(incidentId);
+                  if (tursoRec) appealRecord = tursoRec;
+                } catch (_) {}
+              }
+            }
+
+            const resolvedDevId = (action === "pardon_dev" && targetVal && targetVal !== "none" && targetVal !== "all")
+              ? targetVal
+              : (appealRecord?.deviceId || "");
+            const resolvedIp = (action === "pardon_ip" && targetVal && targetVal !== "none")
+              ? targetVal
+              : (appealRecord?.ip || "");
+
             let alertMsg = "";
             let statusSuffix = "";
 
             if (action === "pardon_dev") {
-              if (targetVal === "all") {
-                unjailByIncident(incidentId);
-                alertMsg = `✅ Connection Pardoned & Unjailed! (Incident: ${incidentId})`;
-              } else {
-                if (targetVal && targetVal !== "none") {
-                  unjailDevice(targetVal);
-                }
-                unjailByIncident(incidentId);
-                alertMsg = `✅ Device Pardoned & Released! (Device: ${targetVal ? targetVal.slice(0, 8) : ""}...)`;
-              }
-              statusSuffix = `\n\n━━━━━━━━━━━━━━━━━━━━━━\n✅ <b>PARDONED BY ADMIN:</b> Device/Connection released by @${fromUser?.username || fromUser?.first_name || "Admin"}`;
-            } else if (action === "pardon_ip") {
-              if (targetVal && targetVal !== "none") {
-                unjailIp(targetVal);
+              if (resolvedDevId) {
+                unjailDevice(resolvedDevId);
               }
               unjailByIncident(incidentId);
-              alertMsg = `✅ Full IP Pardoned & Unjailed! (IP: ${targetVal})`;
+              alertMsg = resolvedDevId
+                ? `✅ Device Pardoned & Released! (Device: ${resolvedDevId.slice(0, 12)}...)`
+                : `✅ Connection Pardoned & Unjailed! (Incident: ${incidentId})`;
+              statusSuffix = `\n\n━━━━━━━━━━━━━━━━━━━━━━\n✅ <b>PARDONED BY ADMIN:</b> Device/Connection released by @${fromUser?.username || fromUser?.first_name || "Admin"}`;
+            } else if (action === "pardon_ip") {
+              if (resolvedIp) {
+                unjailIp(resolvedIp);
+              }
+              unjailByIncident(incidentId);
+              alertMsg = `✅ Full IP Pardoned & Unjailed! (${resolvedIp || incidentId})`;
               statusSuffix = `\n\n━━━━━━━━━━━━━━━━━━━━━━\n✅ <b>PARDONED BY ADMIN:</b> Full IP released by @${fromUser?.username || fromUser?.first_name || "Admin"}`;
             } else if (action === "deny") {
               alertMsg = `❌ Appeal Rejected. Detention maintained.`;
               statusSuffix = `\n\n━━━━━━━━━━━━━━━━━━━━━━\n❌ <b>REJECTED BY ADMIN:</b> Detention kept active by @${fromUser?.username || fromUser?.first_name || "Admin"}`;
             }
+            const reportEntity = action === "pardon_ip" ? (resolvedIp || targetVal) : (resolvedDevId || targetVal);
 
             // 🗑️ Delete appeal record completely from database & dispatch resolution report to Topic 750
             if (action === "pardon_dev" || action === "pardon_ip") {
@@ -946,8 +1005,8 @@ async function startSecurityBotPoller() {
                     const snap = await db.collection("jail_appeals").where("incidentId", "==", incidentId).get();
                     for (const d of snap.docs) await d.ref.delete();
                   }
-                  if (targetVal && targetVal !== "none" && targetVal !== "all") {
-                    const snapIp = await db.collection("jail_appeals").where("ip", "==", targetVal).get();
+                  if (resolvedIp) {
+                    const snapIp = await db.collection("jail_appeals").where("ip", "==", resolvedIp).get();
                     for (const d of snapIp.docs) await d.ref.delete();
                   }
                 }
@@ -958,7 +1017,7 @@ async function startSecurityBotPoller() {
               // Also delete from Turso 4 Security Defense Vault
               try {
                 const { deleteTursoJailAppeal } = require("./tursoStudentVaultService");
-                await deleteTursoJailAppeal(incidentId, targetVal);
+                await deleteTursoJailAppeal(incidentId, resolvedIp || null);
               } catch (_) {}
 
               // Dispatch release report to Topic 750
@@ -968,7 +1027,7 @@ async function startSecurityBotPoller() {
                   `🟢 <b>[SECURITY QUARANTINE RELEASE / PARDON REPORT]</b>`,
                   `━━━━━━━━━━━━━━━━━━━━━━`,
                   incidentId ? `🆔 <b>Incident ID:</b> <code>${incidentId}</code>` : null,
-                  targetVal && targetVal !== "none" ? `🎯 <b>Released Entity:</b> <code>${targetVal}</code>` : null,
+                  reportEntity && reportEntity !== "none" ? `🎯 <b>Released Entity:</b> <code>${reportEntity}</code>` : null,
                   `⚡ <b>Scope:</b> ${action === "pardon_ip" ? "Full IP Unjailed" : "Device Unjailed"}`,
                   `👮 <b>Pardoned By:</b> @${fromUser?.username || fromUser?.first_name || "Admin"}`,
                   `🗑️ <b>Database Status:</b> Complete Record Purged from Database (0 trace)`,
@@ -977,7 +1036,7 @@ async function startSecurityBotPoller() {
 
                 await sendTelegramAuthNotice({
                   event: "IP_JAIL_APPEAL",
-                  user: { name: fromUser?.first_name || "Admin", email: "Admin", ip: targetVal || "N/A" },
+                  user: { name: fromUser?.first_name || "Admin", email: "Admin", ip: resolvedIp || "N/A" },
                   method: "Admin Telegram Inline Pardon",
                   detail: releaseReport,
                   threadId: process.env.TELEGRAM_TOPIC_IP_APPEAL || "750",

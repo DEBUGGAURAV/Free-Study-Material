@@ -87,21 +87,32 @@ function isUserAdmin(req) {
     const query = req.query || {};
 
     const authHeader = typeof headers["authorization"] === "string" ? headers["authorization"] : "";
-    const token =
-      cookies.fsm_token ||
-      cookies.token ||
-      cookies.vault_token ||
-      query.token ||
-      (authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : null);
+    const headerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
+    const candidates = [
+      headerToken,
+      cookies.fsm_admin_token,
+      cookies.admin_token,
+      cookies.fsm_token,
+      cookies.vault_token,
+      cookies.token,
+      query.token,
+    ].filter((t, i, arr) => t && t !== "null" && t !== "undefined" && arr.indexOf(t) === i);
 
-    if (token && JWT_SECRET) {
-      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
-      if (
-        decoded.role === "admin" ||
-        decoded.role === "half_admin" ||
-        Boolean(adminEmail && decoded.email && decoded.email.toLowerCase().trim() === adminEmail)
-      ) {
-        return true;
+    if (candidates.length > 0 && JWT_SECRET) {
+      for (const tok of candidates) {
+        try {
+          const decoded = jwt.verify(tok, JWT_SECRET, { algorithms: ["HS256"] });
+          if (
+            decoded &&
+            (decoded.role === "admin" ||
+              decoded.role === "half_admin" ||
+              decoded.isMainAdmin ||
+              decoded.isMasterAdmin ||
+              Boolean(adminEmail && decoded.email && decoded.email.toLowerCase().trim() === adminEmail))
+          ) {
+            return true;
+          }
+        } catch (_) {}
       }
     }
   } catch {}

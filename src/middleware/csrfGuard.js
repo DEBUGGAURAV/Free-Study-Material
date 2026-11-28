@@ -26,6 +26,8 @@ const EXEMPTED_PATHS = [
   "/api/auth/forgot-password-verify-otp",
   "/api/auth/register",
   "/api/auth/google",
+  "/api/auth/passkey/login-options",
+  "/api/auth/passkey/login-verify",
   "/api/security/tamper-alert",
   "/api/security/anti-bot-alert",
   "/api/security/jail-appeal",
@@ -37,6 +39,8 @@ const TRUSTED_DOMAINS = [
   "freestudymaterial1.onrender.com",
   "freestudymaterial2.onrender.com",
   "fsm-edge.jnplotus.workers.dev",
+  "fsm-chat-edge.jnplotus.workers.dev",
+  "fsm-ai-edge.jnplotus.workers.dev",
 ];
 
 /**

@@ -110,7 +110,25 @@ async function initStudentTursoTables() {
     await studentTursoClient.execute(`CREATE INDEX IF NOT EXISTS idx_jail_appeals_ip ON jail_appeals(ip);`).catch(() => {});
     await studentTursoClient.execute(`CREATE INDEX IF NOT EXISTS idx_jail_appeals_status ON jail_appeals(status);`).catch(() => {});
 
-    console.log("[TURSO-STUDENT-VAULT] ✅ Student telemetry, account lockouts & jail appeals tables verified.");
+    // 3. Distributed Active IP & Device Jails (Multi-Node Sync across Render instances & restarts)
+    await studentTursoClient.execute(`
+      CREATE TABLE IF NOT EXISTS active_ip_jails (
+        jail_key TEXT PRIMARY KEY,
+        jail_type TEXT NOT NULL,
+        target TEXT NOT NULL,
+        incident_id TEXT,
+        ip TEXT,
+        device_id TEXT,
+        reason TEXT,
+        duration_label TEXT,
+        unjail_time INTEGER NOT NULL,
+        jailed_at INTEGER NOT NULL
+      );
+    `);
+    await studentTursoClient.execute(`CREATE INDEX IF NOT EXISTS idx_active_jails_unjail ON active_ip_jails(unjail_time);`).catch(() => {});
+    await studentTursoClient.execute(`CREATE INDEX IF NOT EXISTS idx_active_jails_incident ON active_ip_jails(incident_id);`).catch(() => {});
+
+    console.log("[TURSO-STUDENT-VAULT] ✅ Student telemetry, account lockouts, active jails & jail appeals tables verified.");
   } catch (err) {
     console.warn("[TURSO-STUDENT-VAULT] Table init notice:", err.message);
   }
@@ -285,6 +303,132 @@ async function deleteTursoJailAppeal(incidentId, ip = null) {
   }
 }
 
+async function getTursoJailAppealByIncident(incidentId) {
+  if (!studentTursoClient || !incidentId) return null;
+  try {
+    const res = await studentTursoClient.execute({
+      sql: "SELECT * FROM jail_appeals WHERE incident_id = ? LIMIT 1",
+      args: [String(incidentId)],
+    });
+    if (res.rows && res.rows.length > 0) {
+      const r = res.rows[0];
+      return {
+        incidentId: r.incident_id,
+        name: r.name,
+        email: r.email,
+        mobile: r.mobile,
+        message: r.message,
+        ip: r.ip,
+        deviceId: r.device_id,
+        status: r.status,
+        createdAt: r.created_at,
+      };
+    }
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * 🛡️ Distributed Active IP / Device Jail Persistence Helpers (Turso 4)
+ */
+async function saveTursoActiveJail({ jailType, target, incidentId, ip, deviceId, reason, durationLabel, unjailTime, jailedAt }) {
+  if (!studentTursoClient || !jailType || !target || !unjailTime) return false;
+  try {
+    const jailKey = `${jailType}:${target}`;
+    await studentTursoClient.execute({
+      sql: `INSERT OR REPLACE INTO active_ip_jails
+            (jail_key, jail_type, target, incident_id, ip, device_id, reason, duration_label, unjail_time, jailed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        String(jailKey),
+        String(jailType),
+        String(target),
+        String(incidentId || ""),
+        String(ip || ""),
+        String(deviceId || ""),
+        String(reason || "Security policy violation"),
+        String(durationLabel || ""),
+        Number(unjailTime),
+        Number(jailedAt || Date.now()),
+      ],
+    });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function getActiveTursoJails(limit = 500) {
+  if (!studentTursoClient) return [];
+  try {
+    const now = Date.now();
+    const res = await studentTursoClient.execute({
+      sql: "SELECT * FROM active_ip_jails WHERE unjail_time > ? ORDER BY jailed_at DESC LIMIT ?",
+      args: [now, Math.min(1000, Math.max(1, limit))],
+    });
+    return (res.rows || []).map((r) => ({
+      jailKey: r.jail_key,
+      jailType: r.jail_type,
+      target: r.target,
+      incidentId: r.incident_id || "",
+      ip: r.ip || "",
+      deviceId: r.device_id || "",
+      reason: r.reason || "Security policy violation",
+      durationLabel: r.duration_label || "",
+      unjailTime: Number(r.unjail_time || 0),
+      jailedAt: Number(r.jailed_at || now),
+    }));
+  } catch (_) {
+    return [];
+  }
+}
+
+async function deleteTursoActiveJail({ jailType, target, incidentId }) {
+  if (!studentTursoClient) return false;
+  try {
+    if (jailType && target) {
+      await studentTursoClient.execute({
+        sql: "DELETE FROM active_ip_jails WHERE jail_key = ?",
+        args: [`${jailType}:${target}`],
+      });
+    }
+    if (incidentId) {
+      await studentTursoClient.execute({
+        sql: "DELETE FROM active_ip_jails WHERE incident_id = ?",
+        args: [String(incidentId)],
+      });
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function clearAllTursoActiveJails() {
+  if (!studentTursoClient) return false;
+  try {
+    await studentTursoClient.execute("DELETE FROM active_ip_jails");
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function pruneExpiredTursoActiveJails() {
+  if (!studentTursoClient) return false;
+  try {
+    await studentTursoClient.execute({
+      sql: "DELETE FROM active_ip_jails WHERE unjail_time <= ?",
+      args: [Date.now()],
+    });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 /**
  * ⚡ Live Speed & Health Telemetry for Tab 4 (Software & Maintenance)
  */
@@ -417,7 +561,13 @@ module.exports = {
   getActiveTursoLockouts,
   saveTursoJailAppeal,
   getTursoJailAppeals,
+  getTursoJailAppealByIncident,
   deleteTursoJailAppeal,
+  saveTursoActiveJail,
+  getActiveTursoJails,
+  deleteTursoActiveJail,
+  clearAllTursoActiveJails,
+  pruneExpiredTursoActiveJails,
   purgeUserFromStudentVault,
 };
 
