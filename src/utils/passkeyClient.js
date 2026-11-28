@@ -24,11 +24,10 @@ export async function isPasskeySupported() {
   if (typeof window === "undefined") return false;
   if (!browserSupportsWebAuthn()) return false;
   try {
-    const isPlatform = await platformAuthenticatorIsAvailable();
-    return Boolean(isPlatform);
-  } catch (_) {
-    return true; // WebAuthn supported, proceed with prompt
-  }
+    await platformAuthenticatorIsAvailable();
+  } catch (_) {}
+  // Universal Passkeys (Windows Hello, Face ID, Android Biometrics, Phone QR Passkey & Password Manager)
+  return true;
 }
 
 /**
@@ -52,7 +51,10 @@ export async function registerDevicePasskey(customDeviceName = "", context = "")
         throw new Error("Passkey registration cancelled by user.");
       }
       if (bioErr.name === "InvalidStateError") {
-        throw new Error("This passkey is already registered on your device.");
+        throw new Error("This device already has a registered passkey. Delete the old entry or register another device.");
+      }
+      if (bioErr.name === "NotSupportedError") {
+        throw new Error("No compatible biometric or passkey provider available on this browser profile.");
       }
       throw bioErr;
     }

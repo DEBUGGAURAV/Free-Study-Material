@@ -246,8 +246,8 @@ router.get("/register-options", authenticateToken, async (req, res) => {
       authenticatorSelection: {
         residentKey: "preferred",
         userVerification: "preferred",
-        // Platform authenticator = Face ID / Touch ID / Windows Hello / Android Biometrics
-        authenticatorAttachment: "platform",
+        // Universal Passkey mode (W3C recommended): prefers local biometrics (Windows Hello / Face ID / Android)
+        // and falls back seamlessly to Phone QR Passkey, Google Password Manager, or Security Key without device lock errors.
       },
       excludeCredentials: existingPasskeys.map((p) => ({
         id: p.id,
