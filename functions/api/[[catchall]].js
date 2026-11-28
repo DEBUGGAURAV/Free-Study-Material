@@ -5,8 +5,9 @@
  */
 
 const BACKEND_ORIGINS = [
-  "https://freestudymaterial1.onrender.com",  // Active Healthy Node #1
-  "https://freestudymaterial2.onrender.com",  // Active Healthy Node #2
+  "https://freestudymaterial1.onrender.com",  // Active Node #1
+  "https://freestudymaterial2.onrender.com",  // Active Node #2
+  "https://freestudymaterial.onrender.com",   // Backup Node #3 (auto-skipped by circuit breaker if sleeping/down)
 ];
 
 // Circuit Breaker: Cache unhealthy origins for 60s to avoid 2-5s retry lag on dead backends

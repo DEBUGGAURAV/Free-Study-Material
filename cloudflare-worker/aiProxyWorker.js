@@ -84,10 +84,11 @@ function markOriginUp(origin) {
   failedOriginCooldowns.delete(origin);
 }
 
-// Cluster origins: prefer Worker env vars, with resilient fallback to active Render production nodes
+// Cluster origins: prefer Worker env vars, with resilient 3-node fallback to Render production nodes
 const DEFAULT_CLUSTER_ORIGINS = [
   "https://freestudymaterial1.onrender.com",
   "https://freestudymaterial2.onrender.com",
+  "https://freestudymaterial.onrender.com",
 ];
 
 function getAllClusterOrigins(env) {

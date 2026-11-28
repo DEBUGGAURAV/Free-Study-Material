@@ -5,8 +5,9 @@
  */
 
 const WS_BACKEND_ORIGINS = [
-  "https://freestudymaterial1.onrender.com", // Primary live chat broker
-  "https://freestudymaterial2.onrender.com", // Failover live chat broker
+  "https://freestudymaterial1.onrender.com", // Primary live chat broker (Node #1)
+  "https://freestudymaterial2.onrender.com", // Failover live chat broker (Node #2)
+  "https://freestudymaterial.onrender.com",  // Failover live chat broker (Node #3)
 ];
 
 const unhealthyWsOrigins = new Map();
@@ -19,6 +20,7 @@ function isTrustedWsOrigin(origin) {
     return (
       host === "freestudymaterial.pages.dev" ||
       host.endsWith(".freestudymaterial.pages.dev") ||
+      host === "freestudymaterial.onrender.com" ||
       host === "freestudymaterial1.onrender.com" ||
       host === "freestudymaterial2.onrender.com" ||
       host === "fsm-chat-edge.jnplotus.workers.dev" ||

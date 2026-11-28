@@ -56,7 +56,7 @@ function getClusterOrigins(env) {
   const raw = [
     e.ORIGIN_URL || "https://freestudymaterial1.onrender.com",
     e.BACKUP_ORIGIN_URL_1 || "https://freestudymaterial2.onrender.com",
-    e.BACKUP_ORIGIN_URL_2 || "",
+    e.BACKUP_ORIGIN_URL_2 || "https://freestudymaterial.onrender.com",
   ];
   const unique = [];
   for (const item of raw) {
