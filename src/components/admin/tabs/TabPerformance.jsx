@@ -158,22 +158,23 @@ export default function TabPerformance(props) {
                     {/* In-Memory RAM Cache */}
                     <div>
                       {(() => {
-                        const usedMB = cdnStats?.ramUsedMB ?? 0;
-                        const poolMaxMB = Math.max(1024, Math.ceil((usedMB + 128) / 512) * 512);
-                        const percent = Math.min(100, Math.round((usedMB / poolMaxMB) * 100));
+                        const usedMB = Number(cdnStats?.ramUsedMB ?? 0);
+                        const poolMaxMB = Number(cdnStats?.ramPoolMaxMB || 128);
+                        const percent = poolMaxMB > 0 ? Math.min(100, Math.round((usedMB / poolMaxMB) * 100)) : 0;
+                        const itemsCount = Number(cdnStats?.ramBufferItems ?? 0);
                         return (
                           <>
                             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                               <span style={{ color: "#475569", fontWeight: 600 }}>In-Memory RAM Cache Pool:</span>
                               <span style={{ color: "#059669", fontWeight: 700 }}>
-                                {usedMB.toFixed(1)} MB / {poolMaxMB} MB ({percent}% used)
+                                {usedMB.toFixed(2)} MB / {poolMaxMB} MB ({percent}% used)
                               </span>
                             </div>
                             <div style={{ width: "100%", height: "6px", background: "#e2e8f0", borderRadius: "999px", overflow: "hidden" }}>
                               <div style={{ width: `${percent}%`, height: "100%", background: "#10b981", borderRadius: "999px" }} />
                             </div>
                             <div style={{ fontSize: "0.72rem", color: "#475569", marginTop: "4px" }}>
-                              Dedicated high-speed memory pool for microsecond document streaming without disk access.
+                              Live Node.js PDF RAM buffer ({itemsCount} hot {itemsCount === 1 ? "note" : "notes"} in memory; large PDFs stream directly via Disk/Edge to keep RAM safe).
                             </div>
                           </>
                         );

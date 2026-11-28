@@ -2334,17 +2334,17 @@ router.get("/cdn/stats", authenticateToken, checkAdminOrPermission("all"), async
   const edgeBandwidthSavedMB = (totalEdgeBandwidthBytes / (1024 * 1024)).toFixed(1);
   const edgeBandwidthSavedGB = (totalEdgeBandwidthBytes / (1024 * 1024 * 1024)).toFixed(2);
 
-  // Real In-Memory RAM Buffer calculation from notesRouter:
+  // Real In-Memory RAM Buffer calculation from notesRouter (NEVER fall back to Cloudflare Edge CDN bytes!)
   const memInfo = (notesRouter && typeof notesRouter.getMemoryCacheInfo === "function")
     ? notesRouter.getMemoryCacheInfo()
-    : { totalBytes: 0, itemCount: 0, totalMB: "0.0" };
-  const ramBufferBytes = isPurged ? 0 : (memInfo.totalBytes || 0);
-  const ramBufferItems = isPurged ? 0 : (memInfo.itemCount || 0);
-
-  const calculatedRamUsedMB = ramBufferBytes > 0
-    ? Number((ramBufferBytes / (1024 * 1024)).toFixed(1))
-    : (cachedFilesCount > 0 ? Number(Math.max(1.0, (cachedCdnBytes / (1024 * 1024))).toFixed(1)) : 0.0);
-  const ramUsedMB = Math.max(0.0, Number(calculatedRamUsedMB.toFixed(1)));
+    : { totalBytes: 0, itemCount: 0, totalMB: "0.0", maxBytes: 128 * 1024 * 1024 };
+  const ramBufferBytes = isPurged ? 0 : (Number(memInfo.totalBytes) || 0);
+  const ramBufferItems = isPurged ? 0 : (Number(memInfo.itemCount) || 0);
+  const ramPoolMaxMB = Math.max(
+    64,
+    Math.round((Number(memInfo.maxBytes) || (128 * 1024 * 1024)) / (1024 * 1024))
+  );
+  const ramUsedMB = Math.max(0.0, Number((ramBufferBytes / (1024 * 1024)).toFixed(2)));
 
   const totalHits = Math.max(0, (ramStats.hits || 0));
   const totalMisses = Math.max(0, (ramStats.misses || 0));
@@ -2371,6 +2371,8 @@ router.get("/cdn/stats", authenticateToken, checkAdminOrPermission("all"), async
       hitRatio,
     },
     ramUsedMB,
+    ramPoolMaxMB,
+    ramBufferItems,
     hitRatio,
     hits: totalHits,
     misses: totalMisses,
