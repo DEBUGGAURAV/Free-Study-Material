@@ -947,7 +947,9 @@ async function sendTelegramAuthNotice({
         `💾 <b>File Size:</b> <code>${realSizeStr}</code>\n` +
         `👤 <b>Uploaded By:</b> <code>${escapeTgHtml(user.name || "Student Contributor")}</code>\n` +
         (user.email ? `📧 <b>Email:</b> <code>${escapeTgHtml(user.email)}</code>\n` : "") +
-        `🔗 <b>Direct Link:</b> ${getNotePublicUrl(note?.id)}\n` +
+        `🆔 <b>Note ID:</b> <code>${escapeTgHtml(note?.id || "N/A")}</code>\n` +
+        `🔗 <b>Direct Link:</b> ${getNotePublicUrl(note?.id, siteUrl)}\n` +
+        `📂 <b>Portable Path:</b> <code>/note/${escapeTgHtml(note?.id || "")}</code>\n` +
         `🕒 <b>Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
         `<i>Auto-routed to dedicated Subject Topic. Document & Receipt published separately.</i>`;
     } else if (event === "NOTE_DOWNLOAD" || event === "NOTE_PREVIEW") {

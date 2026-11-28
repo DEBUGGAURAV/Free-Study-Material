@@ -778,7 +778,9 @@ async function processIncomingMessage(message) {
           `📚 <b>Subject:</b> ${dupData.subject || subject}\n` +
           `🎓 <b>Program:</b> ${dupData.course || course} (${dupData.branch || branch} • ${dupData.year || year})\n` +
           `💾 <b>Size:</b> ${realSize}\n` +
+          `🆔 <b>Note ID:</b> <code>${duplicateDoc.id}</code>\n` +
           `🔗 <b>Direct Link:</b> ${getNotePublicUrl(duplicateDoc.id)}\n` +
+          `📂 <b>Portable Path:</b> <code>/note/${duplicateDoc.id}</code>\n` +
           `🌐 <b>Website:</b> ${siteUrl}\n\n` +
           `<i>🛡️ <b>Deduplication Shield:</b> This document is already indexed and live on the website. Duplicate re-upload was safely prevented to conserve cloud storage. Students can access it directly.</i>`;
 
@@ -921,7 +923,9 @@ async function processIncomingMessage(message) {
         `📚 <b>Subject:</b> ${subject}\n` +
         `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
         `💾 <b>Size:</b> ${realSize}\n` +
+        `🆔 <b>Note ID:</b> <code>${noteRef.id}</code>\n` +
         `🔗 <b>Direct Link:</b> ${getNotePublicUrl(noteRef.id)}\n` +
+        `📂 <b>Portable Path:</b> <code>/note/${noteRef.id}</code>\n` +
         `🌐 <b>Website:</b> ${siteUrl2}\n\n` +
         `<i>Note is now live at #1 position and accessible to all registered students.</i>`;
 

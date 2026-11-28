@@ -765,7 +765,9 @@ function setupChannelSyncListeners(c) {
           `📚 <b>Subject:</b> ${subject}\n` +
           `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
           `💾 <b>Size:</b> ${realSize}\n` +
+          `🆔 <b>Note ID:</b> <code>${noteRef.id}</code>\n` +
           `🔗 <b>Direct Link:</b> ${getNotePublicUrl(noteRef.id)}\n` +
+          `📂 <b>Portable Path:</b> <code>/note/${noteRef.id}</code>\n` +
           `🌐 <b>Website:</b> ${siteUrl}\n\n` +
           `<i>Note is now live at #1 position and accessible to all registered students.</i>`;
 
@@ -1252,7 +1254,9 @@ async function syncTelegramChannel() {
               `📚 <b>Subject:</b> ${subject}\n` +
               `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
               `💾 <b>Size:</b> ${formatMb} MB\n` +
+              `🆔 <b>Note ID:</b> <code>${noteRef.id}</code>\n` +
               `🔗 <b>Direct Link:</b> ${getNotePublicUrl(noteRef.id)}\n` +
+              `📂 <b>Portable Path:</b> <code>/note/${noteRef.id}</code>\n` +
               `🌐 <b>Website:</b> ${siteUrl}\n\n` +
               `<i>Note is now live at #1 position and accessible to all registered students.</i>`;
 
